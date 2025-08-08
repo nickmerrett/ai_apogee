@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Philosopher Chat</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1><i class="fas fa-brain"></i> AI Philosopher Chat</h1>
+            <p class="subtitle">Moderated debates between AI minds, reaching for consensus</p>
+        </header>
+
+        <div class="setup-panel" id="setupPanel">
+            <div class="setup-card">
+                <h2><i class="fas fa-comments"></i> Start a New Philosophical Debate</h2>
+                <div class="topic-input">
+                    <label for="topicInput">What topic should the AIs explore together?</label>
+                    <input type="text" id="topicInput" placeholder="e.g., What is the nature of consciousness?" />
+                    <button id="startButton" class="start-btn">
+                        <i class="fas fa-play"></i> Begin Debate
+                    </button>
+                </div>
+                
+                <div class="configuration-panel">
+                    <h3><i class="fas fa-cog"></i> Configuration</h3>
+                    <div class="config-grid">
+                        <div class="config-item">
+                            <label for="maxTokens">Max Tokens per Response:</label>
+                            <input type="number" id="maxTokens" value="300" min="50" max="1000" step="50">
+                            <small>Controls response length (50-1000)</small>
+                        </div>
+                        <div class="config-item">
+                            <label for="temperature">Creativity (Temperature):</label>
+                            <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.7">
+                            <small>Value: <span id="tempValue">0.7</span> (0.0 = Focused, 1.0 = Creative)</small>
+                        </div>
+                        <div class="config-item">
+                            <label for="autoRounds">
+                                <input type="checkbox" id="autoRounds" checked>
+                                Enable Auto-Rounds (max 2 without human input)
+                            </label>
+                            <small>AIs can continue discussing for up to 2 rounds automatically</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="example-topics">
+                    <h3>Example Topics:</h3>
+                    <div class="topic-tags">
+                        <span class="topic-tag" data-topic="What is the nature of consciousness?">Consciousness</span>
+                        <span class="topic-tag" data-topic="Is free will an illusion?">Free Will</span>
+                        <span class="topic-tag" data-topic="What constitutes a meaningful life?">Meaning of Life</span>
+                        <span class="topic-tag" data-topic="Should AI have rights?">AI Rights</span>
+                        <span class="topic-tag" data-topic="What is the relationship between mind and reality?">Mind & Reality</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-interface" id="mainInterface" style="display: none;">
+            <div class="conversation-header">
+                <h2 id="conversationTopic"></h2>
+                <div class="participants" id="participants"></div>
+                <div class="controls">
+                    <button id="nextRoundBtn" class="control-btn">
+                        <i class="fas fa-forward"></i> Next Round
+                    </button>
+                    <button id="consensusBtn" class="control-btn">
+                        <i class="fas fa-handshake"></i> Check Consensus
+                    </button>
+                    <button id="configBtn" class="control-btn">
+                        <i class="fas fa-cog"></i> Settings
+                    </button>
+                    <button id="exportBtn" class="control-btn">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                </div>
+            </div>
+
+            <div class="main-content">
+                <div class="chat-section">
+                    <div class="chat-container" id="chatContainer">
+                        <div class="messages" id="messages"></div>
+                    </div>
+                    
+                    <div class="input-section">
+                        <div class="input-container">
+                            <textarea id="messageInput" placeholder="Add your perspective to the debate..." rows="3"></textarea>
+                            <button id="sendButton" class="send-btn">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="analytics-section">
+                    <div class="consensus-panel">
+                        <h3><i class="fas fa-chart-line"></i> Consensus Tracker</h3>
+                        <div class="consensus-gauge">
+                            <canvas id="consensusChart" width="200" height="200"></canvas>
+                            <div class="consensus-info">
+                                <div class="consensus-level" id="consensusLevel">0%</div>
+                                <div class="consensus-status" id="consensusStatus">Starting discussion</div>
+                            </div>
+                        </div>
+                        <div class="consensus-history">
+                            <canvas id="consensusHistory" width="300" height="150"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="themes-panel">
+                        <h3><i class="fas fa-tags"></i> Key Themes</h3>
+                        <div id="themesContainer" class="themes-container">
+                            <div class="no-data">Themes will appear as the conversation develops...</div>
+                        </div>
+                    </div>
+
+                    <div class="insights-panel">
+                        <h3><i class="fas fa-lightbulb"></i> Recent Insights</h3>
+                        <div id="insightsContainer" class="insights-container">
+                            <div class="no-data">Insights will be extracted from the discussion...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pagination-controls" id="paginationControls" style="display: none;">
+                <button id="prevPage" class="page-btn">
+                    <i class="fas fa-chevron-left"></i> Previous
+                </button>
+                <span id="pageInfo">Page 1 of 1</span>
+                <button id="nextPage" class="page-btn">
+                    Next <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div id="statusIndicator" class="status-ready">
+                <i class="fas fa-circle"></i> Ready
+            </div>
+            <div id="aiStatus" class="ai-status"></div>
+        </div>
+
+        <!-- Configuration Modal -->
+        <div id="configModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-cog"></i> Conversation Settings</h3>
+                    <button id="closeConfigModal" class="modal-close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="config-form">
+                        <div class="config-item">
+                            <label for="modalMaxTokens">Max Tokens per Response:</label>
+                            <input type="number" id="modalMaxTokens" value="300" min="50" max="1000" step="50">
+                            <small>Controls response length (50-1000 tokens)</small>
+                        </div>
+                        <div class="config-item">
+                            <label for="modalTemperature">Creativity (Temperature):</label>
+                            <input type="range" id="modalTemperature" min="0" max="1" step="0.1" value="0.7">
+                            <small>Value: <span id="modalTempValue">0.7</span> (0.0 = Focused, 1.0 = Creative)</small>
+                        </div>
+                        <div class="config-item">
+                            <label for="modalAutoRounds">
+                                <input type="checkbox" id="modalAutoRounds" checked>
+                                Enable Auto-Rounds (max 2 without human input)
+                            </label>
+                            <small>Allow AIs to continue for up to 2 rounds automatically</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="applyConfigBtn" class="apply-btn">
+                        <i class="fas fa-check"></i> Apply Settings
+                    </button>
+                    <button id="cancelConfigBtn" class="cancel-btn">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification Area -->
+        <div id="notificationArea" class="notification-area"></div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
