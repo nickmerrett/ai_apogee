@@ -6,14 +6,13 @@
     <title>AI Philosopher Chat</title>
     <link rel="stylesheet" href="/css/style.css">
     <script src="/socket.io/socket.io.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
     <div class="container">
         <header class="header">
             <h1><i class="fas fa-brain"></i> AI Philosopher Chat</h1>
-            <p class="subtitle">Moderated debates between AI minds, reaching for consensus</p>
+            <p class="subtitle">Moderated philosophical debates between AI minds</p>
         </header>
 
         <div class="setup-panel" id="setupPanel">
@@ -71,8 +70,8 @@
                     <button id="nextRoundBtn" class="control-btn">
                         <i class="fas fa-forward"></i> Next Round
                     </button>
-                    <button id="consensusBtn" class="control-btn">
-                        <i class="fas fa-handshake"></i> Check Consensus
+                    <button id="endConversationBtn" class="control-btn end-btn">
+                        <i class="fas fa-stop-circle"></i> End & Summarize
                     </button>
                     <button id="configBtn" class="control-btn">
                         <i class="fas fa-cog"></i> Settings
@@ -100,17 +99,10 @@
                 </div>
 
                 <div class="analytics-section">
-                    <div class="consensus-panel">
-                        <h3><i class="fas fa-chart-line"></i> Consensus Tracker</h3>
-                        <div class="consensus-gauge">
-                            <canvas id="consensusChart" width="200" height="200"></canvas>
-                            <div class="consensus-info">
-                                <div class="consensus-level" id="consensusLevel">0%</div>
-                                <div class="consensus-status" id="consensusStatus">Starting discussion</div>
-                            </div>
-                        </div>
-                        <div class="consensus-history">
-                            <canvas id="consensusHistory" width="300" height="150"></canvas>
+                    <div class="ai-controls-panel">
+                        <h3><i class="fas fa-robot"></i> AI Participants</h3>
+                        <div id="aiControlsContainer" class="ai-controls-container">
+                            <div class="no-data">Loading AI providers...</div>
                         </div>
                     </div>
 
@@ -184,6 +176,34 @@
                     </button>
                     <button id="cancelConfigBtn" class="cancel-btn">
                         Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Modal -->
+        <div id="summaryModal" class="modal" style="display: none;">
+            <div class="modal-content summary-modal">
+                <div class="modal-header">
+                    <h3><i class="fas fa-file-alt"></i> Conversation Summary</h3>
+                    <button id="closeSummaryModal" class="modal-close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div id="summaryContent" class="summary-content">
+                        <div class="loading-summary">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            Generating detailed summary...
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="downloadSummaryBtn" class="apply-btn" style="display: none;">
+                        <i class="fas fa-download"></i> Download Summary
+                    </button>
+                    <button id="closeSummaryBtn" class="cancel-btn">
+                        Close
                     </button>
                 </div>
             </div>

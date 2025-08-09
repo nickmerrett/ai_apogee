@@ -5,8 +5,8 @@ class PhilosopherChatApp {
         this.currentPage = 1;
         this.messagesPerPage = 20;
         this.allMessages = [];
-        this.consensusChart = null;
-        this.historyChart = null;
+        this.availableProviders = [];
+        this.activeProviders = new Set();
         
         this.init();
     }
@@ -47,7 +47,7 @@ class PhilosopherChatApp {
         });
 
         document.getElementById('nextRoundBtn').addEventListener('click', () => this.requestAIResponses());
-        document.getElementById('consensusBtn').addEventListener('click', () => this.checkConsensus());
+        document.getElementById('endConversationBtn').addEventListener('click', () => this.endConversation());
         document.getElementById('configBtn').addEventListener('click', () => this.showConfigModal());
         document.getElementById('exportBtn').addEventListener('click', () => this.exportConversation());
 
@@ -63,6 +63,17 @@ class PhilosopherChatApp {
         document.getElementById('configModal').addEventListener('click', (e) => {
             if (e.target.id === 'configModal') {
                 this.hideConfigModal();
+            }
+        });
+
+        // Summary modal events
+        document.getElementById('closeSummaryModal').addEventListener('click', () => this.hideSummaryModal());
+        document.getElementById('closeSummaryBtn').addEventListener('click', () => this.hideSummaryModal());
+        document.getElementById('downloadSummaryBtn').addEventListener('click', () => this.downloadSummary());
+
+        document.getElementById('summaryModal').addEventListener('click', (e) => {
+            if (e.target.id === 'summaryModal') {
+                this.hideSummaryModal();
             }
         });
     }
@@ -105,13 +116,20 @@ class PhilosopherChatApp {
         });
 
         this.socket.on('analytics-update', (data) => {
-            this.updateConsensus(data.consensus);
             this.updateThemes(data.themes);
             this.updateInsights(data.insights);
         });
 
-        this.socket.on('consensus-update', (consensus) => {
-            this.updateConsensus(consensus);
+        this.socket.on('summary-generating', (data) => {
+            this.updateSummaryProgress(data.status);
+        });
+
+        this.socket.on('summary-generated', (data) => {
+            this.displaySummary(data.summary);
+        });
+
+        this.socket.on('providers-updated', (data) => {
+            this.updateAIControls(data.providers);
         });
 
         this.socket.on('auto-round-notification', (data) => {
@@ -134,6 +152,9 @@ class PhilosopherChatApp {
         try {
             const response = await fetch('/api/providers');
             const data = await response.json();
+            
+            this.availableProviders = data.providers || [];
+            this.activeProviders = new Set(this.availableProviders.map(p => p.name));
             
             if (!data.available) {
                 this.updateAIStatus('Demo mode - Add API keys for full functionality');
@@ -176,7 +197,7 @@ class PhilosopherChatApp {
             
             this.displayParticipants(data.participants);
             this.socket.emit('join-conversation', this.conversationId);
-            this.initializeCharts();
+            this.initializeAIControls();
             
             this.updateStatus('ready', 'Conversation started');
             
@@ -206,9 +227,15 @@ class PhilosopherChatApp {
         this.updateAIStatus('Requesting AI responses...');
     }
 
-    checkConsensus() {
-        this.socket.emit('request-consensus-check', this.conversationId);
-        this.updateAIStatus('Checking for consensus...');
+    endConversation() {
+        if (!this.conversationId) {
+            this.showNotification('No active conversation to end', 'error');
+            return;
+        }
+        
+        this.showSummaryModal();
+        this.socket.emit('end-conversation', this.conversationId);
+        this.updateAIStatus('Ending conversation and generating summary...');
     }
 
     displayParticipants(participants) {
@@ -280,92 +307,60 @@ class PhilosopherChatApp {
         }
     }
 
-    initializeCharts() {
-        this.initConsensusChart();
-        this.initHistoryChart();
-    }
+    initializeAIControls() {
+        const container = document.getElementById('aiControlsContainer');
+        
+        if (this.availableProviders.length === 0) {
+            container.innerHTML = '<div class="no-data">No AI providers available</div>';
+            return;
+        }
 
-    initConsensusChart() {
-        const ctx = document.getElementById('consensusChart').getContext('2d');
-        this.consensusChart = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                datasets: [{
-                    data: [0, 100],
-                    backgroundColor: ['#5a67d8', '#e2e8f0'],
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: false,
-                cutout: '70%',
-                plugins: {
-                    legend: { display: false }
-                }
-            }
+        container.innerHTML = this.availableProviders.map(provider => {
+            const isActive = this.activeProviders.has(provider.name);
+            const iconClass = provider.name.toLowerCase();
+            const iconText = provider.name.charAt(0);
+            
+            return `
+                <div class="ai-control-item">
+                    <div class="ai-provider-info">
+                        <div class="ai-provider-icon ${iconClass}">${iconText}</div>
+                        <span class="ai-provider-name">${provider.name}</span>
+                    </div>
+                    <div class="ai-toggle ${isActive ? 'active' : ''}" data-provider="${provider.name}"></div>
+                </div>
+            `;
+        }).join('');
+
+        // Add click handlers for toggles
+        container.querySelectorAll('.ai-toggle').forEach(toggle => {
+            toggle.addEventListener('click', (e) => {
+                const providerName = e.target.dataset.provider;
+                this.toggleAIProvider(providerName);
+            });
         });
     }
 
-    initHistoryChart() {
-        const ctx = document.getElementById('consensusHistory').getContext('2d');
-        this.historyChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Consensus Level',
-                    data: [],
-                    borderColor: '#5a67d8',
-                    backgroundColor: 'rgba(90, 103, 216, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
-                            }
-                        }
-                    }
-                },
-                plugins: {
-                    legend: { display: false }
-                }
-            }
+    toggleAIProvider(providerName) {
+        if (this.activeProviders.has(providerName)) {
+            this.activeProviders.delete(providerName);
+        } else {
+            this.activeProviders.add(providerName);
+        }
+
+        // Update UI
+        const toggle = document.querySelector(`.ai-toggle[data-provider="${providerName}"]`);
+        if (toggle) {
+            toggle.classList.toggle('active', this.activeProviders.has(providerName));
+        }
+
+        // Notify server
+        this.socket.emit('update-active-providers', {
+            conversationId: this.conversationId,
+            activeProviders: Array.from(this.activeProviders)
         });
-    }
 
-    updateConsensus(consensus) {
-        if (!consensus) return;
-
-        document.getElementById('consensusLevel').textContent = consensus.level + '%';
-        document.getElementById('consensusStatus').textContent = consensus.summary;
-
-        if (this.consensusChart) {
-            this.consensusChart.data.datasets[0].data = [consensus.level, 100 - consensus.level];
-            this.consensusChart.update();
-        }
-
-        if (this.historyChart) {
-            const labels = this.historyChart.data.labels;
-            const data = this.historyChart.data.datasets[0].data;
-            
-            labels.push(new Date().toLocaleTimeString());
-            data.push(consensus.level);
-            
-            if (labels.length > 10) {
-                labels.shift();
-                data.shift();
-            }
-            
-            this.historyChart.update();
-        }
+        const status = this.activeProviders.has(providerName) ? 'enabled' : 'disabled';
+        this.updateAIStatus(`${providerName} ${status}`);
     }
 
     updateThemes(themes) {
@@ -583,6 +578,103 @@ class PhilosopherChatApp {
             console.error('Export failed:', error);
             this.updateAIStatus('Export failed');
         }
+    }
+
+    showSummaryModal() {
+        document.getElementById('summaryModal').style.display = 'flex';
+        document.getElementById('summaryContent').innerHTML = `
+            <div class="loading-summary">
+                <i class="fas fa-spinner fa-spin"></i>
+                <div class="progress-text">Preparing comprehensive analysis...</div>
+                <div class="progress-note">This may take 1-2 minutes for a detailed white paper style summary</div>
+            </div>
+        `;
+        document.getElementById('downloadSummaryBtn').style.display = 'none';
+    }
+
+    updateSummaryProgress(status) {
+        const loadingDiv = document.querySelector('.loading-summary');
+        if (loadingDiv) {
+            const progressText = loadingDiv.querySelector('.progress-text');
+            if (progressText) {
+                progressText.textContent = status;
+            }
+        }
+    }
+
+    hideSummaryModal() {
+        document.getElementById('summaryModal').style.display = 'none';
+    }
+
+    displaySummary(summary) {
+        const content = document.getElementById('summaryContent');
+        content.innerHTML = `<div class="summary-text">${summary}</div>`;
+        document.getElementById('downloadSummaryBtn').style.display = 'inline-flex';
+        this.currentSummary = summary;
+    }
+
+    downloadSummary() {
+        if (!this.currentSummary) return;
+        
+        const conversation = this.memory?.getCurrentConversation() || {};
+        const summaryData = {
+            topic: conversation.topic || 'Philosophical Discussion',
+            summary: this.currentSummary,
+            generatedAt: new Date().toISOString(),
+            messageCount: this.allMessages.length
+        };
+        
+        const blob = new Blob([this.formatSummaryForDownload(summaryData)], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `conversation-summary-${Date.now()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        URL.revokeObjectURL(url);
+        this.showNotification('Summary downloaded successfully', 'success');
+    }
+
+    formatSummaryForDownload(summaryData) {
+        // Convert HTML back to clean text format for download
+        const cleanText = summaryData.summary
+            .replace(/<h1[^>]*>(.*?)<\/h1>/g, '\n\n$1\n' + '='.repeat(50) + '\n')
+            .replace(/<h2[^>]*>(.*?)<\/h2>/g, '\n\n$1\n' + '-'.repeat(30) + '\n')
+            .replace(/<h3[^>]*>(.*?)<\/h3>/g, '\n\n$1\n' + '~'.repeat(20) + '\n')
+            .replace(/<h4[^>]*>(.*?)<\/h4>/g, '\n\n$1:\n')
+            .replace(/<p[^>]*>(.*?)<\/p>/g, '\n$1\n')
+            .replace(/<li[^>]*>(.*?)<\/li>/g, '• $1\n')
+            .replace(/<ul[^>]*>|<\/ul>/g, '')
+            .replace(/<ol[^>]*>|<\/ol>/g, '')
+            .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/g, '\n"$1"\n')
+            .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
+            .replace(/<em>(.*?)<\/em>/g, '*$1*')
+            .replace(/<code[^>]*>(.*?)<\/code>/g, '`$1`')
+            .replace(/<br>/g, '\n')
+            .replace(/<hr[^>]*>/g, '\n' + '-'.repeat(50) + '\n')
+            .replace(/<[^>]+>/g, '') // Remove any remaining HTML tags
+            .replace(/\n\n\n+/g, '\n\n'); // Clean up excessive newlines
+
+        return `COMPREHENSIVE PHILOSOPHICAL ANALYSIS
+========================================
+
+CONVERSATION METADATA:
+Topic: ${summaryData.topic}
+Generated: ${new Date(summaryData.generatedAt).toLocaleString()}
+Total Messages: ${summaryData.messageCount}
+Analysis Type: Detailed White Paper Style Summary
+Word Count: ~${cleanText.split(' ').length} words
+
+${cleanText}
+
+=====================================
+Generated by AI Philosopher Chat
+Academic Analysis Engine v2.0
+=====================================
+`;
     }
 }
 

@@ -7,6 +7,9 @@ import { fileURLToPath } from 'url';
 import { ClaudeProvider } from './providers/claude-provider.js';
 import { ChatGPTProvider } from './providers/chatgpt-provider.js';
 import { GeminiProvider } from './providers/gemini-provider.js';
+import { MetaProvider } from './providers/meta-provider.js';
+import { WatsonxProvider } from './providers/watsonx-provider.js';
+import { GrokProvider } from './providers/grok-provider.js';
 import { ConversationMemory } from './utils/memory.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -16,6 +19,9 @@ const CONFIG = {
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
+  META_API_KEY: process.env.META_API_KEY,
+  WATSONX_API_KEY: process.env.WATSONX_API_KEY,
+  GROK_API_KEY: process.env.GROK_API_KEY,
   PORT: process.env.PORT || 3000
 };
 
@@ -35,6 +41,7 @@ class PhilosopherChatServer {
     this.activeConversations = new Map();
     this.conversationConfigs = new Map();
     this.autoRoundCounts = new Map();
+    this.conversationActiveProviders = new Map();
     
     this.setupProviders();
     this.setupMiddleware();
@@ -71,6 +78,33 @@ class PhilosopherChatServer {
         console.log('✅ Gemini provider initialized');
       } catch (error) {
         console.log('❌ Failed to initialize Gemini:', error.message);
+      }
+    }
+
+    if (CONFIG.META_API_KEY) {
+      try {
+        this.providers.push(new MetaProvider(CONFIG.META_API_KEY, config));
+        console.log('✅ Meta AI provider initialized');
+      } catch (error) {
+        console.log('❌ Failed to initialize Meta AI:', error.message);
+      }
+    }
+
+    if (CONFIG.WATSONX_API_KEY) {
+      try {
+        this.providers.push(new WatsonxProvider(CONFIG.WATSONX_API_KEY, config));
+        console.log('✅ Watsonx provider initialized');
+      } catch (error) {
+        console.log('❌ Failed to initialize Watsonx:', error.message);
+      }
+    }
+
+    if (CONFIG.GROK_API_KEY) {
+      try {
+        this.providers.push(new GrokProvider(CONFIG.GROK_API_KEY, config));
+        console.log('✅ Grok provider initialized');
+      } catch (error) {
+        console.log('❌ Failed to initialize Grok:', error.message);
       }
     }
 
@@ -122,6 +156,9 @@ class PhilosopherChatServer {
       });
       
       this.autoRoundCounts.set(conversationId, 0);
+      
+      // Initialize all providers as active
+      this.conversationActiveProviders.set(conversationId, new Set(this.providers.map(p => p.name)));
       
       res.json({ conversationId, participants, config: this.conversationConfigs.get(conversationId) });
     });
@@ -195,9 +232,28 @@ class PhilosopherChatServer {
         await this.processAIResponses(conversationId);
       });
 
-      socket.on('request-consensus-check', async (conversationId) => {
-        const consensus = await this.memory.updateConsensus(this.providers);
-        this.io.to(conversationId).emit('consensus-update', consensus);
+      socket.on('update-active-providers', (data) => {
+        const { conversationId, activeProviders } = data;
+        this.conversationActiveProviders.set(conversationId, new Set(activeProviders));
+        
+        // Send only safe, serializable data about providers
+        socket.emit('providers-updated', {
+          providers: this.providers
+            .filter(p => activeProviders.includes(p.name))
+            .map(p => ({ 
+              name: p.name,
+              active: true 
+            }))
+        });
+      });
+
+      socket.on('end-conversation', async (conversationId) => {
+        try {
+          await this.generateConversationSummary(conversationId, socket);
+        } catch (error) {
+          console.error('Error generating summary:', error);
+          socket.emit('error', { message: 'Failed to generate summary' });
+        }
       });
 
       socket.on('disconnect', () => {
@@ -217,6 +273,7 @@ class PhilosopherChatServer {
     const history = this.memory.getConversationHistory(conversationId);
     const conversation = this.memory.getCurrentConversation();
     const config = this.conversationConfigs.get(conversationId) || {};
+    const activeProviders = this.conversationActiveProviders.get(conversationId) || new Set();
     
     if (!conversation) return;
 
@@ -226,7 +283,15 @@ class PhilosopherChatServer {
       conversationHistory: history
     };
 
-    for (const provider of this.providers) {
+    // Only process responses from active providers
+    const providersToUse = this.providers.filter(p => activeProviders.has(p.name));
+    
+    if (providersToUse.length === 0) {
+      this.io.to(conversationId).emit('error', { message: 'No active AI providers selected' });
+      return;
+    }
+
+    for (const provider of providersToUse) {
       try {
         this.io.to(conversationId).emit('ai-thinking', { 
           provider: provider.name 
@@ -260,7 +325,8 @@ class PhilosopherChatServer {
           insights: analytics.insights.slice(-5)
         });
 
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Longer delay between AI responses for better pacing
+        await new Promise(resolve => setTimeout(resolve, 4000));
 
       } catch (error) {
         console.error(`Error from ${provider.name}:`, error.message);
@@ -303,6 +369,9 @@ class PhilosopherChatServer {
       /^Claude:\s*/i,
       /^ChatGPT:\s*/i,
       /^Gemini:\s*/i,
+      /^Meta AI:\s*/i,
+      /^Watsonx:\s*/i,
+      /^Grok:\s*/i,
       /^Human:\s*/i,
       /^\w+:\s*/
     ];
@@ -313,6 +382,280 @@ class PhilosopherChatServer {
     });
 
     return cleaned.trim();
+  }
+
+  async generateConversationSummary(conversationId, socket) {
+    const history = this.memory.getConversationHistory(conversationId);
+    const conversation = this.memory.getCurrentConversation();
+    
+    if (!conversation || history.length === 0) {
+      socket.emit('error', { message: 'No conversation to summarize' });
+      return;
+    }
+
+    // Find Claude provider for summary generation
+    const claudeProvider = this.providers.find(p => p.name === 'Claude');
+    if (!claudeProvider) {
+      socket.emit('error', { message: 'Claude provider not available for summary generation' });
+      return;
+    }
+
+    // Prepare conversation context for summary
+    const conversationText = history.map(msg => 
+      `${msg.speaker}: ${msg.content}`
+    ).join('\n\n');
+
+    const summaryPrompt = `You are tasked with creating a comprehensive, detailed philosophical analysis that reads like a mini white paper or academic research summary. This should be extensive, thorough, and use thousands of words to deeply examine every aspect of the conversation.
+
+CONVERSATION DETAILS:
+- Topic: "${conversation.topic}"
+- Participants: ${conversation.participants.join(', ')}
+- Message Count: ${history.length} messages
+- Duration: Multi-turn philosophical dialogue
+
+TASK: Create an exhaustive, multi-page analysis (aim for 3000-5000+ words) that serves as a complete philosophical examination. This should read like an academic paper or comprehensive research report.
+
+REQUIRED STRUCTURE (expand each section extensively):
+
+# PHILOSOPHICAL DIALOGUE ANALYSIS: ${conversation.topic}
+
+## EXECUTIVE SUMMARY
+Provide a substantial overview (300-500 words) that captures the essence, scope, and significance of this philosophical inquiry.
+
+## 1. INTRODUCTION & CONTEXTUAL FRAMEWORK
+- Historical and philosophical context of the topic
+- Why this question matters in contemporary discourse
+- Relevance to broader philosophical traditions
+- Scope and boundaries of the discussion
+
+## 2. METHODOLOGICAL APPROACH
+- Nature of the dialogue format
+- Participant perspectives and backgrounds
+- Conversational dynamics and flow
+- Quality and depth of engagement
+
+## 3. COMPREHENSIVE ARGUMENT ANALYSIS
+
+### 3.1 Core Philosophical Positions Presented
+For EACH participant, provide extensive analysis:
+- Primary philosophical stance
+- Underlying assumptions and premises
+- Logical structure of their arguments
+- Evidence and reasoning patterns
+- Philosophical tradition/school alignment
+- Strengths and potential weaknesses
+
+### 3.2 Argument Development Patterns
+- How each position evolved through the dialogue
+- Refinements and clarifications made
+- Response patterns to challenges
+- Adaptation of arguments based on feedback
+
+## 4. THEMATIC DEEP DIVE
+
+### 4.1 Primary Themes Explored
+Identify and extensively analyze each major theme:
+- Definition and scope of the theme
+- How it emerged in conversation
+- Different perspectives offered
+- Philosophical significance
+- Connection to broader discourse
+
+### 4.2 Secondary and Implicit Themes
+- Underlying assumptions that surfaced
+- Unspoken philosophical commitments
+- Emergent questions and implications
+- Cross-connections between themes
+
+## 5. CRITICAL ANALYSIS OF KEY EXCHANGES
+
+Select 3-5 pivotal moments in the conversation and provide detailed analysis:
+- Context and setup of the exchange
+- Precise argumentation presented
+- Logical moves and countermoves
+- Philosophical significance
+- Impact on overall discussion trajectory
+
+## 6. AREAS OF CONVERGENCE AND SYNTHESIS
+
+### 6.1 Points of Agreement
+- Explicit agreements reached
+- Implicit common ground
+- Shared assumptions and values
+- Potential for synthesis
+
+### 6.2 Productive Tensions
+- Disagreements that enhanced understanding
+- Constructive challenges and responses
+- Dialectical development of ideas
+
+## 7. PERSISTENT DISAGREEMENTS AND DIVERGENCE
+
+### 7.1 Fundamental Differences
+- Irreconcilable philosophical positions
+- Root causes of disagreement
+- Different epistemological or ontological commitments
+- Methodological differences
+
+### 7.2 Analysis of Disagreement Patterns
+- Why certain positions remained fixed
+- Quality of engagement with opposing views
+- Missed opportunities for dialogue
+
+## 8. PHILOSOPHICAL INSIGHTS AND CONTRIBUTIONS
+
+### 8.1 Novel Insights Generated
+- Original thoughts or perspectives that emerged
+- Creative combinations of existing ideas
+- Unexpected connections made
+
+### 8.2 Clarifications and Refinements
+- How existing positions were sharpened
+- Ambiguities resolved or identified
+- Conceptual distinctions drawn
+
+## 9. BROADER PHILOSOPHICAL IMPLICATIONS
+
+### 9.1 Contribution to the Field
+- How this dialogue advances philosophical understanding
+- Connections to ongoing academic debates
+- Potential influence on future inquiry
+
+### 9.2 Practical and Applied Implications
+- Real-world relevance of the insights
+- Ethical, political, or social ramifications
+- Applications to other philosophical areas
+
+## 10. DIALOGUE QUALITY ASSESSMENT
+
+### 10.1 Conversational Dynamics
+- Quality of listening and engagement
+- Charitable interpretation of opposing views
+- Intellectual honesty and rigor
+- Emotional and rational balance
+
+### 10.2 Areas for Further Development
+- Questions left unresolved
+- Avenues for future exploration
+- Gaps in reasoning or evidence
+- Opportunities for deeper inquiry
+
+## 11. COMPARATIVE ANALYSIS
+- How this discussion relates to historical philosophical debates
+- Connections to major philosophical works and thinkers
+- Novel aspects or unique contributions
+- Position within contemporary philosophical landscape
+
+## 12. CONCLUSION AND SYNTHESIS
+- Comprehensive integration of all findings
+- Assessment of the dialogue's overall contribution
+- Remaining open questions
+- Directions for future philosophical inquiry
+- Final reflections on the topic's significance
+
+---
+
+IMPORTANT INSTRUCTIONS:
+- Write extensively on EACH section - aim for several paragraphs per subsection
+- Use sophisticated philosophical vocabulary and analysis
+- Include specific quotes and references from the conversation
+- Provide deep, nuanced analysis rather than surface-level descriptions
+- Make connections to broader philosophical traditions and thinkers when relevant
+- Ensure academic rigor while remaining accessible
+- Use this opportunity to demonstrate the full depth and richness of the philosophical exchange
+
+CONVERSATION TRANSCRIPT:
+${conversationText}`;
+
+    try {
+      socket.emit('summary-generating', { status: 'Preparing comprehensive analysis...' });
+      
+      const context = {
+        topic: conversation.topic,
+        participants: conversation.participants,
+        conversationHistory: []  // Empty for summary generation
+      };
+
+      // Temporarily increase token limit for comprehensive summary
+      const originalMaxTokens = claudeProvider.maxTokens;
+      claudeProvider.maxTokens = 8000; // Much higher limit for detailed summary
+      
+      // Show progress updates
+      setTimeout(() => socket.emit('summary-generating', { status: 'Analyzing philosophical arguments...' }), 2000);
+      setTimeout(() => socket.emit('summary-generating', { status: 'Extracting key themes and insights...' }), 4000);
+      setTimeout(() => socket.emit('summary-generating', { status: 'Synthesizing comprehensive analysis...' }), 6000);
+      setTimeout(() => socket.emit('summary-generating', { status: 'Finalizing white paper format...' }), 8000);
+      
+      const summary = await claudeProvider.sendMessage(summaryPrompt, context);
+      
+      // Restore original token limit
+      claudeProvider.maxTokens = originalMaxTokens;
+      
+      // Format the summary with proper HTML for display
+      const formattedSummary = this.formatSummaryHTML(summary);
+      
+      socket.emit('summary-generated', { summary: formattedSummary });
+      
+      console.log(`✅ Summary generated for conversation ${conversationId}`);
+      
+    } catch (error) {
+      console.error('Error generating summary:', error);
+      socket.emit('error', { message: 'Failed to generate summary: ' + error.message });
+    }
+  }
+
+  formatSummaryHTML(summary) {
+    // Enhanced HTML formatting for academic/white paper style
+    return summary
+      // Main title (single #)
+      .replace(/^# (.*$)/gm, '<h1 class="summary-title">$1</h1>')
+      
+      // Section headers (double ##)
+      .replace(/^## (.*$)/gm, '<h2 class="summary-section">$1</h2>')
+      
+      // Subsection headers (triple ###)
+      .replace(/^### (.*$)/gm, '<h3 class="summary-subsection">$1</h3>')
+      
+      // Sub-subsection headers (quadruple ####)
+      .replace(/^#### (.*$)/gm, '<h4 class="summary-subsubsection">$1</h4>')
+      
+      // Bold text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      
+      // Italic text
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      
+      // Bullet points with proper nesting
+      .replace(/^- (.*$)/gm, '<li class="summary-bullet">$1</li>')
+      .replace(/(\n<li class="summary-bullet">.*?<\/li>)+/g, '<ul class="summary-list">$&</ul>')
+      .replace(/<\/li>\n<li class="summary-bullet">/g, '</li><li class="summary-bullet">')
+      
+      // Numbered lists
+      .replace(/^\d+\. (.*$)/gm, '<li class="summary-numbered">$1</li>')
+      .replace(/(\n<li class="summary-numbered">.*?<\/li>)+/g, '<ol class="summary-ordered-list">$&</ol>')
+      .replace(/<\/li>\n<li class="summary-numbered">/g, '</li><li class="summary-numbered">')
+      
+      // Quotes or important callouts
+      .replace(/^> (.*$)/gm, '<blockquote class="summary-quote">$1</blockquote>')
+      
+      // Code or technical terms (backticks)
+      .replace(/`(.*?)`/g, '<code class="summary-code">$1</code>')
+      
+      // Horizontal rules for section breaks
+      .replace(/^---$/gm, '<hr class="summary-divider">')
+      
+      // Paragraph breaks - convert double newlines to proper paragraphs
+      .replace(/\n\n+/g, '</p><p class="summary-paragraph">')
+      
+      // Single newlines become line breaks within paragraphs
+      .replace(/\n/g, '<br>')
+      
+      // Wrap the entire content in a paragraph container
+      .replace(/^(.*)$/s, '<div class="summary-content"><p class="summary-paragraph">$1</p></div>')
+      
+      // Clean up any empty paragraphs
+      .replace(/<p class="summary-paragraph"><\/p>/g, '')
+      .replace(/<p class="summary-paragraph"><br><\/p>/g, '');
   }
 
   start() {
