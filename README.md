@@ -5,7 +5,7 @@ A moderated chat interface where multiple AI chatbots engage in respectful philo
 ## Features
 
 - **🌐 Web Interface**: Modern, responsive web UI with real-time updates
-- **🤖 Multi-AI Debate**: Support for Claude, ChatGPT, and Gemini
+- **🤖 Multi-AI Debate**: Support for Claude, ChatGPT, Gemini, Meta AI, Watsonx, and Grok
 - **👨‍💼 Human Moderation**: Direct participation and conversation steering
 - **🧠 Memory Management**: Comprehensive conversation tracking and history
 - **📊 Consensus Tracking**: Real-time consensus visualization and graphs
@@ -36,6 +36,9 @@ A moderated chat interface where multiple AI chatbots engage in respectful philo
    export ANTHROPIC_API_KEY="your_anthropic_key"
    export OPENAI_API_KEY="your_openai_key" 
    export GOOGLE_API_KEY="your_google_key"
+   export META_API_KEY="your_meta_api_key"
+   export WATSONX_API_KEY="your_watsonx_api_key"
+   export GROK_API_KEY="your_grok_api_key"
    ```
 
 3. **Run the Application**
@@ -98,6 +101,9 @@ A moderated chat interface where multiple AI chatbots engage in respectful philo
 - **Claude Provider**: Anthropic's Claude integration
 - **ChatGPT Provider**: OpenAI's GPT integration  
 - **Gemini Provider**: Google's Gemini integration
+- **Meta AI Provider**: Meta's Llama model integration
+- **Watsonx Provider**: IBM's Watsonx AI integration
+- **Grok Provider**: xAI's Grok model integration
 
 ### Adding New AI Providers
 
@@ -131,8 +137,34 @@ export class NewAIProvider extends BaseAIProvider {
 - **Anthropic**: Get your key at [console.anthropic.com](https://console.anthropic.com)
 - **OpenAI**: Get your key at [platform.openai.com](https://platform.openai.com)
 - **Google**: Get your key at [ai.google.dev](https://ai.google.dev)
+- **Meta AI**: Get your key for Llama models (various providers support Meta's models)
+- **IBM Watsonx**: Get your key at [cloud.ibm.com](https://cloud.ibm.com/catalog/services/watsonx-ai)
+- **xAI Grok**: Get your key at [x.ai/api](https://x.ai/api)
 
-At least one API key is required to run the application.
+At least one API key is required to run the application. Each provider can be enabled/disabled independently.
+
+### Provider-Specific Features
+
+- **Claude**: Exceptional reasoning and nuanced philosophical analysis
+- **ChatGPT**: Strong general knowledge and conversational ability
+- **Gemini**: Multi-modal capabilities and Google's knowledge integration
+- **Meta AI**: Llama models with strong open-source foundation
+- **Watsonx**: Enterprise-grade IBM AI with business focus
+- **Grok**: xAI's model with real-time information access and direct communication style
+
+### Provider Configuration
+
+Each provider supports configurable parameters:
+```bash
+# Token limits (default: 300)
+export MAX_TOKENS=500
+
+# Temperature settings (default: 0.7) 
+export TEMPERATURE=0.8
+
+# Auto-rounds feature (default: enabled)
+export AUTO_ROUNDS=true
+```
 
 ## Memory Features
 
