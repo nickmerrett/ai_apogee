@@ -117,7 +117,7 @@ class PhilosopherChatApp {
 
         this.socket.on('analytics-update', (data) => {
             this.updateThemes(data.themes);
-            this.updateInsights(data.insights);
+            this.updateWordMap(data.wordMap);
         });
 
         this.socket.on('summary-generating', (data) => {
@@ -140,6 +140,11 @@ class PhilosopherChatApp {
         this.socket.on('auto-round-complete', (data) => {
             this.showNotification(data.message, 'success');
             this.updateAIStatus(data.message);
+        });
+
+        this.socket.on('random-selection', (data) => {
+            this.showRandomSelectionNotification(data);
+            this.updateAIStatus('Random selection: ' + data.message.replace('🎲 ', ''));
         });
 
         this.socket.on('error', (error) => {
@@ -373,33 +378,36 @@ class PhilosopherChatApp {
 
         container.innerHTML = themes.map(theme => `
             <div class="theme-item">
-                <span class="theme-name">${theme.name}</span>
-                <span class="theme-count">${theme.count}</span>
+                <div class="theme-name">${theme.name}</div>
+                <div class="theme-summary">${theme.summary}</div>
             </div>
         `).join('');
     }
 
-    updateInsights(insights) {
-        const container = document.getElementById('insightsContainer');
+    updateWordMap(wordMap) {
+        const container = document.getElementById('wordmapContainer');
         
-        if (!insights || insights.length === 0) {
-            container.innerHTML = '<div class="no-data">No insights extracted yet...</div>';
+        if (!wordMap || wordMap.length === 0) {
+            container.innerHTML = '<div class="no-data">Word map will populate as the discussion progresses...</div>';
             return;
         }
 
-        container.innerHTML = insights.slice(0, 5).map(insight => `
-            <div class="insight-item">
-                <span class="insight-type ${insight.type}">${insight.type}</span>
-                <div class="insight-text">${insight.text}</div>
-            </div>
+        const wordCloudHtml = wordMap.map(word => `
+            <span class="word-item size-${word.size}" 
+                  data-frequency="${Math.min(word.frequency, 5)}" 
+                  title="${word.word}: ${word.frequency} occurrences">
+                ${word.word}
+            </span>
         `).join('');
+
+        container.innerHTML = `<div class="word-cloud">${wordCloudHtml}</div>`;
     }
 
     updateAnalytics(analytics) {
         if (!analytics) return;
         
         this.updateThemes(analytics.themes);
-        this.updateInsights(analytics.insights);
+        this.updateWordMap(analytics.wordMap);
     }
 
     updatePagination() {
@@ -546,6 +554,29 @@ class PhilosopherChatApp {
 
         // Also show as notification
         this.showNotification(data.message, 'auto-round');
+    }
+
+    showRandomSelectionNotification(data) {
+        const chatContainer = document.getElementById('chatContainer');
+        const indicator = document.createElement('div');
+        indicator.className = 'random-selection-indicator';
+        indicator.innerHTML = `
+            <i class="fas fa-dice"></i>
+            <span>${data.message}</span>
+        `;
+
+        chatContainer.appendChild(indicator);
+        this.scrollToBottom();
+
+        // Remove after 6 seconds
+        setTimeout(() => {
+            if (indicator.parentNode) {
+                indicator.parentNode.removeChild(indicator);
+            }
+        }, 6000);
+
+        // Also show as notification
+        this.showNotification(data.message.replace('🎲 ', ''), 'info');
     }
 
     async exportConversation() {

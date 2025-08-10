@@ -215,7 +215,7 @@ class PhilosopherChatServer {
           this.io.to(conversationId).emit('analytics-update', {
             consensus,
             themes: analytics.themes,
-            insights: analytics.insights
+            wordMap: analytics.wordMap
           });
 
           // Reset auto-round count when human participates
@@ -262,6 +262,28 @@ class PhilosopherChatServer {
     });
   }
 
+  // Helper method to randomly shuffle an array
+  shuffleArray(array) {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  // Helper method to select a random provider
+  getRandomProvider(providers, excludeProvider = null) {
+    const availableProviders = excludeProvider 
+      ? providers.filter(p => p.name !== excludeProvider)
+      : providers;
+    
+    if (availableProviders.length === 0) return null;
+    
+    const randomIndex = Math.floor(Math.random() * availableProviders.length);
+    return availableProviders[randomIndex];
+  }
+
   async processAIResponses(conversationId) {
     if (this.providers.length === 0) {
       this.io.to(conversationId).emit('demo-response', {
@@ -284,11 +306,68 @@ class PhilosopherChatServer {
     };
 
     // Only process responses from active providers
-    const providersToUse = this.providers.filter(p => activeProviders.has(p.name));
+    const availableProviders = this.providers.filter(p => activeProviders.has(p.name));
     
-    if (providersToUse.length === 0) {
+    if (availableProviders.length === 0) {
       this.io.to(conversationId).emit('error', { message: 'No active AI providers selected' });
       return;
+    }
+
+    // RANDOMIZATION: Choose providers in random order
+    // STRICT RULE: Never allow the same provider to speak twice in a row
+    const lastAIMessage = history.slice().reverse().find(msg => msg.speaker !== 'Human');
+    const lastAISpeaker = lastAIMessage ? lastAIMessage.speaker : null;
+    
+    let providersToUse;
+    if (availableProviders.length === 1) {
+      // Only one provider available - must use it (can't avoid repeats)
+      providersToUse = availableProviders;
+      if (lastAISpeaker === availableProviders[0].name) {
+        console.log(`⚠️ Only one provider available: ${availableProviders[0].name} must speak again`);
+      }
+    } else if (history.length === 1) {
+      // First AI responses after human input - randomly shuffle all
+      providersToUse = this.shuffleArray(availableProviders);
+      console.log(`🎲 First round: Random order selected:`, providersToUse.map(p => p.name));
+      
+      // Notify users about random selection
+      this.io.to(conversationId).emit('random-selection', {
+        type: 'first-round',
+        message: `🎲 Randomly selected speaking order: ${providersToUse.map(p => p.name).join(' → ')}`,
+        speakers: providersToUse.map(p => p.name)
+      });
+    } else {
+      // Subsequent rounds - MUST avoid the last AI speaker (strict no-repeat rule)
+      const eligibleProviders = availableProviders.filter(p => p.name !== lastAISpeaker);
+      
+      if (eligibleProviders.length > 0) {
+        // Select randomly from providers who didn't speak last
+        const primaryChoice = this.getRandomProvider(eligibleProviders);
+        const remainingProviders = eligibleProviders.filter(p => p.name !== primaryChoice.name);
+        providersToUse = [primaryChoice, ...this.shuffleArray(remainingProviders)];
+        
+        console.log(`🎲 Random next speaker: ${primaryChoice.name} (strictly avoiding repeat of ${lastAISpeaker})`);
+        console.log(`🎲 Eligible providers were:`, eligibleProviders.map(p => p.name));
+        
+        // Notify users about random selection
+        this.io.to(conversationId).emit('random-selection', {
+          type: 'next-speaker',
+          message: `🎲 ${primaryChoice.name} randomly selected to continue (avoiding ${lastAISpeaker})`,
+          speaker: primaryChoice.name,
+          previousSpeaker: lastAISpeaker,
+          eligibleCount: eligibleProviders.length
+        });
+      } else {
+        // This should never happen if we have multiple providers, but safety fallback
+        console.log(`⚠️ No eligible providers found - this shouldn't happen with multiple active providers`);
+        providersToUse = this.shuffleArray(availableProviders);
+        
+        this.io.to(conversationId).emit('random-selection', {
+          type: 'error-fallback',
+          message: `🎲 Random fallback order: ${providersToUse.map(p => p.name).join(' → ')}`,
+          speakers: providersToUse.map(p => p.name)
+        });
+      }
     }
 
     for (const provider of providersToUse) {
@@ -298,7 +377,18 @@ class PhilosopherChatServer {
         });
 
         const lastMessage = history[history.length - 1];
-        const prompt = `Continue the philosophical discussion about "${conversation.topic}". Build on the previous responses and work toward finding common ground. Recent context: ${lastMessage?.content || 'Begin the discussion.'}`;
+        
+        // Generate varied prompts for more interesting conversations
+        const promptVariations = [
+          `Continue the philosophical discussion about "${conversation.topic}". Build on the previous responses and work toward finding common ground. Recent context: ${lastMessage?.content || 'Begin the discussion.'}`,
+          `Engage with the philosophical question: "${conversation.topic}". Consider the previous perspectives and offer your unique insights. Recent context: ${lastMessage?.content || 'Share your initial thoughts.'}`,
+          `Join the philosophical debate on "${conversation.topic}". What aspects haven't been fully explored yet? Recent context: ${lastMessage?.content || 'What\'s your perspective?'}`,
+          `Contribute to the discussion about "${conversation.topic}". You might agree, disagree, or build upon what's been said. Recent context: ${lastMessage?.content || 'Please share your viewpoint.'}`,
+          `Explore the philosophical dimensions of "${conversation.topic}". What new angles or considerations can you bring? Recent context: ${lastMessage?.content || 'What are your thoughts?'}`
+        ];
+        
+        const randomPromptIndex = Math.floor(Math.random() * promptVariations.length);
+        const prompt = promptVariations[randomPromptIndex];
 
         const response = await provider.sendMessage(prompt, context);
         
@@ -322,11 +412,12 @@ class PhilosopherChatServer {
         this.io.to(conversationId).emit('analytics-update', {
           consensus,
           themes: analytics.themes.slice(0, 5),
-          insights: analytics.insights.slice(-5)
+          wordMap: analytics.wordMap
         });
 
-        // Longer delay between AI responses for better pacing
-        await new Promise(resolve => setTimeout(resolve, 4000));
+        // Add some randomness to response delays too (3-6 seconds)
+        const randomDelay = 3000 + Math.floor(Math.random() * 3000);
+        await new Promise(resolve => setTimeout(resolve, randomDelay));
 
       } catch (error) {
         console.error(`Error from ${provider.name}:`, error.message);

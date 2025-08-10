@@ -4,6 +4,8 @@ export class ConversationAnalytics {
     this.themes = new Map();
     this.insights = [];
     this.sentimentHistory = [];
+    this.wordFrequency = new Map();
+    this.messageContext = [];
   }
 
   analyzeMessage(message, speaker, providers) {
@@ -16,7 +18,9 @@ export class ConversationAnalytics {
       sentiment: this.analyzeSentiment(message)
     };
 
-    this.updateThemes(analysis.themes);
+    this.updateThemes(analysis.themes, message);
+    this.updateWordFrequency(message);
+    this.messageContext.push({ message, speaker, timestamp: analysis.timestamp });
     this.insights.push(...analysis.insights);
     this.sentimentHistory.push({
       timestamp: analysis.timestamp,
@@ -108,13 +112,273 @@ export class ConversationAnalytics {
     return 'neutral';
   }
 
-  updateThemes(newThemes) {
+  updateThemes(newThemes, messageContext = '') {
     newThemes.forEach(theme => {
-      const existing = this.themes.get(theme.name) || { count: 0, totalStrength: 0, keywords: new Set() };
+      const existing = this.themes.get(theme.name) || { 
+        count: 0, 
+        totalStrength: 0, 
+        keywords: new Set(),
+        contexts: [],
+        keyPoints: new Set(),
+        summary: ''
+      };
       existing.count += 1;
       existing.totalStrength += theme.strength;
       theme.keywords.forEach(keyword => existing.keywords.add(keyword));
+      
+      // Store message context and extract key points for summary generation
+      if (messageContext && messageContext.length > 0) {
+        const contextSnippet = this.extractRelevantContext(messageContext, theme.keywords);
+        if (contextSnippet) {
+          existing.contexts.push(contextSnippet);
+          
+          // Extract key philosophical points from this context
+          const keyPoint = this.extractKeyPoint(contextSnippet, theme.name);
+          if (keyPoint) {
+            existing.keyPoints.add(keyPoint);
+          }
+        }
+      }
+      
+      // Regenerate summary each time we get new context
+      if (existing.contexts.length >= 1) {
+        existing.summary = this.generateThematicSummary(theme.name, existing.keyPoints, existing.contexts);
+      }
+      
       this.themes.set(theme.name, existing);
+    });
+  }
+
+  extractRelevantContext(message, keywords) {
+    const sentences = message.split(/[.!?]+/).filter(s => s.trim().length > 20);
+    for (const sentence of sentences) {
+      const lowerSentence = sentence.toLowerCase();
+      if (keywords.some(keyword => lowerSentence.includes(keyword.toLowerCase()))) {
+        return sentence.trim().substring(0, 150) + (sentence.length > 150 ? '...' : '');
+      }
+    }
+    return null;
+  }
+
+  extractKeyPoint(contextSnippet, themeName) {
+    // Extract meaningful philosophical points from context based on theme
+    const lowerContext = contextSnippet.toLowerCase();
+    
+    const themePatterns = {
+      'Consciousness': {
+        patterns: [
+          /what.*consciousness.*(?:is|means|involves)/,
+          /subjective.*experience.*(?:of|involves|includes)/,
+          /awareness.*(?:emerges|develops|exists)/,
+          /qualia.*(?:are|represent|constitute)/,
+          /conscious.*(?:beings|entities|minds)/
+        ],
+        concepts: ['subjective experience', 'awareness levels', 'mental states', 'phenomenal consciousness', 'self-awareness']
+      },
+      'Free Will': {
+        patterns: [
+          /(?:free will|freedom).*(?:exists|illusion|determined)/,
+          /choices.*(?:predetermined|genuine|constrained)/,
+          /determinism.*(?:conflicts|compatible|undermines)/,
+          /agency.*(?:human|moral|causal)/,
+          /decision.*(?:making|process|autonomy)/
+        ],
+        concepts: ['moral responsibility', 'causal determinism', 'choice autonomy', 'decision-making', 'behavioral freedom']
+      },
+      'Reality': {
+        patterns: [
+          /reality.*(?:constructed|objective|subjective)/,
+          /existence.*(?:nature|fundamental|depends)/,
+          /perception.*(?:shapes|creates|distorts)/,
+          /truth.*(?:absolute|relative|correspondence)/,
+          /being.*(?:essence|fundamental|nature)/
+        ],
+        concepts: ['objective vs subjective reality', 'nature of existence', 'perceptual reality', 'truth correspondence', 'ontological being']
+      },
+      'Ethics': {
+        patterns: [
+          /(?:right|wrong).*(?:determined|absolute|relative)/,
+          /moral.*(?:principles|obligations|framework)/,
+          /virtue.*(?:ethics|character|cultivation)/,
+          /duty.*(?:categorical|moral|obligation)/,
+          /consequences.*(?:determine|justify|evaluate)/
+        ],
+        concepts: ['moral principles', 'ethical frameworks', 'virtue development', 'duty-based ethics', 'consequentialist reasoning']
+      },
+      'Knowledge': {
+        patterns: [
+          /knowledge.*(?:acquired|justified|certain)/,
+          /truth.*(?:discovered|constructed|verified)/,
+          /belief.*(?:justified|warranted|reasonable)/,
+          /certainty.*(?:possible|impossible|degrees)/,
+          /epistem.*(?:foundation|method|approach)/
+        ],
+        concepts: ['justified belief', 'truth verification', 'knowledge acquisition', 'epistemic certainty', 'reasoning methods']
+      },
+      'Mind': {
+        patterns: [
+          /mind.*(?:body|brain|separate|identical)/,
+          /mental.*(?:states|processes|phenomena)/,
+          /cognition.*(?:involves|requires|produces)/,
+          /thought.*(?:processes|patterns|emergence)/,
+          /brain.*(?:produces|generates|correlates)/
+        ],
+        concepts: ['mind-body relationship', 'mental processes', 'cognitive mechanisms', 'thought patterns', 'neural correlates']
+      },
+      'Identity': {
+        patterns: [
+          /personal.*identity.*(?:persists|changes|constituted)/,
+          /self.*(?:continuous|constructed|essential)/,
+          /individual.*(?:unique|defined|characterized)/,
+          /person.*(?:remains|becomes|essentially)/,
+          /who.*(?:are|am|defines)/
+        ],
+        concepts: ['personal continuity', 'self-construction', 'individual uniqueness', 'identity persistence', 'essential self']
+      },
+      'Technology': {
+        patterns: [
+          /(?:ai|artificial.*intelligence).*(?:consciousness|rights|ethics)/,
+          /technology.*(?:enhances|replaces|augments)/,
+          /machine.*(?:intelligence|consciousness|learning)/,
+          /digital.*(?:existence|identity|reality)/,
+          /automation.*(?:impact|benefits|concerns)/
+        ],
+        concepts: ['AI consciousness', 'technological enhancement', 'machine intelligence', 'digital existence', 'automation impact']
+      },
+      'Society': {
+        patterns: [
+          /social.*(?:structures|norms|construction)/,
+          /community.*(?:values|obligations|identity)/,
+          /culture.*(?:shapes|influences|determines)/,
+          /human.*(?:nature|cooperation|conflict)/,
+          /collective.*(?:action|responsibility|decision)/
+        ],
+        concepts: ['social structures', 'community values', 'cultural influence', 'human cooperation', 'collective responsibility']
+      },
+      'Meaning': {
+        patterns: [
+          /meaning.*(?:life|existence|created|discovered)/,
+          /purpose.*(?:human|individual|universal)/,
+          /significance.*(?:personal|cosmic|inherent)/,
+          /value.*(?:intrinsic|assigned|created)/,
+          /worth.*(?:human|moral|inherent)/
+        ],
+        concepts: ['life purpose', 'existential meaning', 'personal significance', 'intrinsic value', 'human worth']
+      }
+    };
+
+    const themeData = themePatterns[themeName];
+    if (!themeData) return null;
+
+    // Try to match patterns and return relevant concept
+    for (const pattern of themeData.patterns) {
+      if (pattern.test(lowerContext)) {
+        // Return a relevant concept for this theme
+        const randomConcept = themeData.concepts[Math.floor(Math.random() * themeData.concepts.length)];
+        return randomConcept;
+      }
+    }
+
+    return null;
+  }
+
+  generateThematicSummary(themeName, keyPoints, contexts) {
+    const pointsArray = Array.from(keyPoints);
+    
+    if (pointsArray.length === 0) {
+      // Fallback summaries when no specific points are detected
+      const fallbackSummaries = {
+        'Consciousness': 'Exploring the nature of subjective experience and awareness',
+        'Free Will': 'Examining human agency and the reality of choice',
+        'Reality': 'Investigating the fundamental nature of existence and truth',
+        'Ethics': 'Analyzing moral principles and ethical decision-making',
+        'Knowledge': 'Questioning how we acquire and justify beliefs',
+        'Mind': 'Understanding mental processes and consciousness',
+        'Identity': 'Exploring what defines personal identity over time',
+        'Technology': 'Examining technology\'s impact on human existence',
+        'Society': 'Analyzing social structures and human cooperation',
+        'Meaning': 'Searching for purpose and significance in existence'
+      };
+      return fallbackSummaries[themeName] || 'Philosophical discussion of core concepts';
+    }
+
+    // Generate summary based on detected key points
+    if (pointsArray.length === 1) {
+      return `Discussion focuses on ${pointsArray[0]}`;
+    } else if (pointsArray.length === 2) {
+      return `Exploring ${pointsArray[0]} and ${pointsArray[1]}`;
+    } else {
+      const firstTwo = pointsArray.slice(0, 2).join(', ');
+      const remaining = pointsArray.length - 2;
+      return `Examining ${firstTwo} and ${remaining} other aspect${remaining > 1 ? 's' : ''}`;
+    }
+  }
+
+  updateWordFrequency(message) {
+    // Filter out common stop words and extract meaningful words
+    const stopWords = new Set([
+      // Articles, conjunctions, prepositions
+      'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+      'nor', 'yet', 'so', 'as', 'if', 'than', 'then', 'else', 'while', 'until', 'unless',
+      
+      // Verbs (common auxiliary and linking verbs)
+      'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+      'will', 'would', 'could', 'should', 'may', 'might', 'must', 'shall', 'can', 'cannot',
+      'am', 'going', 'get', 'got', 'getting', 'gets', 'go', 'goes', 'went', 'gone',
+      
+      // Personal pronouns (all forms)
+      'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
+      'my', 'your', 'his', 'hers', 'its', 'our', 'ours', 'their', 'theirs', 'mine', 'yours',
+      'myself', 'yourself', 'himself', 'herself', 'itself', 'ourselves', 'yourselves', 'themselves',
+      
+      // Demonstrative pronouns and determiners
+      'this', 'that', 'these', 'those', 'here', 'there', 'where', 'when', 'why', 'how',
+      'what', 'which', 'who', 'whom', 'whose', 'whatever', 'whoever', 'whichever', 'whenever',
+      'wherever', 'however', 'whether',
+      
+      // Prepositions (extended list)
+      'about', 'above', 'across', 'after', 'against', 'along', 'among', 'around', 'before',
+      'behind', 'below', 'beneath', 'beside', 'besides', 'between', 'beyond', 'during', 'except',
+      'from', 'inside', 'into', 'like', 'near', 'off', 'onto', 'over', 'since', 'through',
+      'toward', 'towards', 'under', 'upon', 'within', 'without', 'underneath', 'alongside',
+      'throughout', 'concerning', 'regarding', 'despite', 'according', 'including', 'excluding',
+      
+      // Adverbs and qualifiers
+      'too', 'very', 'quite', 'rather', 'really', 'truly', 'actually', 'certainly', 'definitely',
+      'probably', 'possibly', 'perhaps', 'maybe', 'likely', 'unlikely', 'clearly', 'obviously',
+      'apparently', 'seemingly', 'presumably', 'supposedly', 'allegedly', 'reportedly',
+      'just', 'now', 'only', 'also', 'back', 'even', 'still', 'yet', 'already', 'again',
+      'once', 'twice', 'always', 'never', 'often', 'sometimes', 'usually', 'frequently',
+      'rarely', 'hardly', 'barely', 'nearly', 'almost', 'quite', 'enough', 'much', 'many',
+      'more', 'most', 'less', 'least', 'few', 'several', 'some', 'any', 'each', 'every',
+      'all', 'both', 'either', 'neither', 'another', 'other', 'others', 'such', 'same',
+      'different', 'similar', 'various', 'certain', 'particular', 'specific', 'general',
+      
+      // Common verbs (action and state)
+      'way', 'well', 'know', 'make', 'see', 'come', 'take', 'use', 'work', 'say', 'think', 
+      'look', 'want', 'need', 'seem', 'become', 'feel', 'find', 'give', 'tell', 'ask',
+      'try', 'help', 'show', 'play', 'move', 'live', 'believe', 'hold', 'bring', 'happen',
+      'write', 'provide', 'sit', 'stand', 'lose', 'add', 'hear', 'meet', 'include', 'continue',
+      'set', 'learn', 'change', 'lead', 'understand', 'watch', 'follow', 'stop', 'create',
+      'speak', 'read', 'allow', 'run', 'walk', 'talk', 'turn', 'start', 'call', 'keep',
+      
+      // Other common words that add little semantic value
+      'thing', 'things', 'something', 'anything', 'nothing', 'everything', 'someone', 'anyone',
+      'everyone', 'nobody', 'somebody', 'anybody', 'everybody', 'somewhere', 'anywhere',
+      'everywhere', 'nowhere', 'somehow', 'anyhow', 'somewhat', 'therefore', 'however',
+      'moreover', 'furthermore', 'nevertheless', 'nonetheless', 'meanwhile', 'otherwise',
+      'instead', 'besides', 'indeed', 'although', 'though', 'because', 'since', 'given',
+      'considering', 'despite', 'regardless', 'concerning', 'regarding'
+    ]);
+
+    const words = message.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 3 && !stopWords.has(word) && !/^\d+$/.test(word));
+
+    words.forEach(word => {
+      const count = this.wordFrequency.get(word) || 0;
+      this.wordFrequency.set(word, count + 1);
     });
   }
 
@@ -179,12 +443,34 @@ export class ConversationAnalytics {
     return Array.from(this.themes.entries())
       .map(([name, data]) => ({
         name,
-        count: data.count,
         averageStrength: data.totalStrength / data.count,
-        keywords: Array.from(data.keywords)
+        keywords: Array.from(data.keywords),
+        summary: data.summary || this.generateThematicSummary(name, new Set(), data.contexts || [])
       }))
-      .sort((a, b) => b.count - a.count)
+      .sort((a, b) => b.averageStrength - a.averageStrength) // Sort by strength rather than count
       .slice(0, limit);
+  }
+
+  getWordMap(limit = 30) {
+    const sortedWords = Array.from(this.wordFrequency.entries())
+      .filter(([word, count]) => count >= 2) // Only include words that appear multiple times
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit);
+
+    return sortedWords.map(([word, frequency]) => {
+      let size = 'md';
+      if (frequency >= 10) size = 'xl';
+      else if (frequency >= 7) size = 'lg';
+      else if (frequency >= 5) size = 'md';
+      else if (frequency >= 3) size = 'sm';
+      else size = 'xs';
+
+      return {
+        word,
+        frequency,
+        size
+      };
+    });
   }
 
   getRecentInsights(limit = 10) {
@@ -208,12 +494,12 @@ export class ConversationAnalytics {
   exportAnalytics() {
     return {
       themes: this.getTopThemes(10),
-      insights: this.getRecentInsights(20),
+      wordMap: this.getWordMap(30),
       consensusHistory: this.getConsensusGraph(),
       sentimentDistribution: this.getSentimentDistribution(),
       summary: {
         totalThemes: this.themes.size,
-        totalInsights: this.insights.length,
+        totalWords: this.wordFrequency.size,
         consensusPoints: this.consensusHistory.length
       }
     };

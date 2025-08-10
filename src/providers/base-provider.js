@@ -38,7 +38,7 @@ CRITICAL RULES:
 - Only provide YOUR OWN response as ${this.name}.
 - Do not acknowledge or repeat what others have said unless directly building on a specific point.
 
-Your role: Engage respectfully and thoughtfully with your own unique perspective. Build on others' ideas while presenting your own viewpoint. Work toward consensus through reasoned discussion. Keep responses focused and under 200 words.
+Your role: Engage respectfully and thoughtfully with your own unique perspective. Build on others' ideas while presenting your own viewpoint. Work toward consensus through reasoned discussion. Its ok to come back to a point, its not necessary to continualy 1-up the speaker before you. Keep responses focused and under 200 words.
 
 Respond ONLY as yourself (${this.name}) with no participant labels or simulated dialogue.`;
   }

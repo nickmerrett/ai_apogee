@@ -14,7 +14,8 @@ export class GrokProvider extends BaseAIProvider {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
-      }
+      },
+      timeout: 60000  // 60 second timeout for Grok responses
     });
   }
 
@@ -52,15 +53,30 @@ export class GrokProvider extends BaseAIProvider {
     });
 
     try {
+      // Grok may tokenize differently, so we use a higher token limit
+      const grokMaxTokens = Math.max(this.maxTokens * 1.5, 500); // At least 500 tokens, or 1.5x configured
+      
       const response = await this.client.post('/chat/completions', {
         model: this.model,
         messages: messages,
-        max_tokens: this.maxTokens,
+        max_tokens: grokMaxTokens,
         temperature: this.temperature,
         stream: false
       });
 
-      const content = response.data.choices[0].message.content;
+      const choice = response.data.choices[0];
+      const content = choice.message.content;
+      
+      // Check if the response was truncated
+      if (choice.finish_reason === 'length') {
+        console.warn(`Grok response was truncated. Consider increasing max_tokens. Current: ${grokMaxTokens}`);
+        console.warn(`Response length: ${content.length} characters`);
+        // Add indicator for truncated response
+        const truncatedContent = content + '\n\n[Response may have been truncated due to token limit]';
+        this.addToHistory('assistant', truncatedContent);
+        return truncatedContent;
+      }
+      
       this.addToHistory('assistant', content);
       return content;
 
@@ -75,7 +91,10 @@ export class GrokProvider extends BaseAIProvider {
       });
       
       // Handle specific error cases
-      if (error.response?.status === 401) {
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        console.error('Grok request timed out - response may be too long or API is slow');
+        return 'Grok response timed out. The API may be experiencing delays or the response was too complex. Please try again with a simpler query.';
+      } else if (error.response?.status === 401) {
         return 'Grok authentication failed. Please check your xAI API key.';
       } else if (error.response?.status === 429) {
         return 'Grok rate limit exceeded. Please wait before making another request.';
@@ -92,12 +111,14 @@ export class GrokProvider extends BaseAIProvider {
   }
 
   async tryAlternativeEndpoint(messages) {
+    const grokMaxTokens = Math.max(this.maxTokens * 1.5, 500); // Consistent higher token limit
+    
     try {
       // Try with grok-2 model if grok-beta fails
       const response = await this.client.post('/chat/completions', {
         model: 'grok-2',
         messages: messages,
-        max_tokens: this.maxTokens,
+        max_tokens: grokMaxTokens,
         temperature: this.temperature,
         stream: false
       });
@@ -111,7 +132,7 @@ export class GrokProvider extends BaseAIProvider {
         const response = await this.client.post('/completions', {
           model: this.model,
           prompt: this.convertMessagesToPrompt(messages),
-          max_tokens: this.maxTokens,
+          max_tokens: grokMaxTokens,
           temperature: this.temperature,
           stop: ['\nHuman:', '\nClaude:', '\nChatGPT:', '\nGemini:', '\nMeta AI:', '\nWatsonx:', '\nGrok:']
         });
