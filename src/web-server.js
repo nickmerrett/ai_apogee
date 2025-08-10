@@ -132,6 +132,16 @@ class PhilosopherChatServer {
   }
 
   setupRoutes() {
+    // Health check endpoint for Docker
+    this.app.get('/health', (req, res) => {
+      res.status(200).json({ 
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        providers: this.providers.length,
+        uptime: process.uptime()
+      });
+    });
+
     this.app.get('/', (req, res) => {
       res.sendFile(path.join(__dirname, '../public/index.html'));
     });

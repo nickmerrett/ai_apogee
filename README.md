@@ -19,6 +19,29 @@ A moderated chat interface where multiple AI chatbots engage in respectful philo
 
 ## Setup
 
+### 🐳 Docker Deployment (Recommended)
+
+The easiest way to run the application is using Docker:
+
+```bash
+# Using the management script (interactive setup)
+./docker-run.sh run
+
+# Or manually
+docker build -t ai-philosopher-chat .
+docker run -d \
+  --name philosopher-chat \
+  -p 3000:3000 \
+  -e ANTHROPIC_API_KEY="your_key" \
+  -e OPENAI_API_KEY="your_key" \
+  -v $(pwd)/data:/app/data \
+  ai-philosopher-chat
+```
+
+See [README.Docker.md](README.Docker.md) for detailed Docker instructions.
+
+### 📦 Local Development
+
 1. **Install Dependencies**
    ```bash
    npm install
