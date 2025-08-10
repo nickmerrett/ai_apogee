@@ -44,4 +44,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     req.end();" || exit 1
 
 # Define the command to run the application
-CMD ["npm", "start"]
+CMD ["npm", "run", "web"]
