@@ -10,6 +10,7 @@ import { GeminiProvider } from './providers/gemini-provider.js';
 import { MetaProvider } from './providers/meta-provider.js';
 import { WatsonxProvider } from './providers/watsonx-provider.js';
 import { GrokProvider } from './providers/grok-provider.js';
+import { MistralProvider } from './providers/mistral-provider.js';
 import { ConversationMemory } from './utils/memory.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22,6 +23,7 @@ const CONFIG = {
   META_API_KEY: process.env.META_API_KEY,
   WATSONX_API_KEY: process.env.WATSONX_API_KEY,
   GROK_API_KEY: process.env.GROK_API_KEY,
+  MISTRAL_API_KEY: process.env.MISTRAL_API_KEY,
   PORT: process.env.PORT || 3000
 };
 
@@ -108,6 +110,15 @@ class PhilosopherChatServer {
       }
     }
 
+    if (CONFIG.MISTRAL_API_KEY) {
+      try {
+        this.providers.push(new MistralProvider(CONFIG.MISTRAL_API_KEY, config));
+        console.log('✅ Mistral provider initialized');
+      } catch (error) {
+        console.log('❌ Failed to initialize Mistral:', error.message);
+      }
+    }
+
     if (this.providers.length === 0) {
       console.log('⚠️  No AI providers available - starting in demo mode');
     }
@@ -179,6 +190,98 @@ class PhilosopherChatServer {
       
       res.json({ success: true, config: this.conversationConfigs.get(conversationId) });
     });
+
+    // Chat history management endpoints
+    this.app.get('/api/conversations', async (req, res) => {
+      try {
+        const conversations = await this.memory.getAllConversations();
+        res.json({ success: true, conversations });
+      } catch (error) {
+        console.error('Failed to get conversations:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    this.app.get('/api/conversations/search', async (req, res) => {
+      try {
+        const { q: query } = req.query;
+        if (!query) {
+          return res.status(400).json({ success: false, error: 'Query parameter is required' });
+        }
+        
+        const results = await this.memory.searchStoredConversations(query);
+        res.json({ success: true, results });
+      } catch (error) {
+        console.error('Failed to search conversations:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    this.app.post('/api/conversation/:id/resume', async (req, res) => {
+      try {
+        const conversationId = req.params.id;
+        const conversation = await this.memory.resumeConversation(conversationId);
+        
+        if (conversation) {
+          // Initialize conversation config
+          this.conversationConfigs.set(conversationId, {
+            maxTokens: 300,
+            temperature: 0.7,
+            autoRounds: true
+          });
+          
+          this.autoRoundCounts.set(conversationId, 0);
+          this.conversationActiveProviders.set(conversationId, new Set(this.providers.map(p => p.name)));
+          
+          res.json({ 
+            success: true, 
+            conversation: {
+              id: conversation.id,
+              topic: conversation.topic,
+              participants: conversation.participants,
+              status: conversation.status
+            },
+            history: conversation.history
+          });
+        } else {
+          res.status(404).json({ success: false, error: 'Conversation not found' });
+        }
+      } catch (error) {
+        console.error('Failed to resume conversation:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    this.app.delete('/api/conversation/:id', async (req, res) => {
+      try {
+        const conversationId = req.params.id;
+        const success = await this.memory.deleteConversation(conversationId);
+        
+        if (success) {
+          // Clean up server state
+          this.conversationConfigs.delete(conversationId);
+          this.autoRoundCounts.delete(conversationId);
+          this.conversationActiveProviders.delete(conversationId);
+          
+          res.json({ success: true });
+        } else {
+          res.status(404).json({ success: false, error: 'Conversation not found' });
+        }
+      } catch (error) {
+        console.error('Failed to delete conversation:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    this.app.get('/api/storage/stats', async (req, res) => {
+      try {
+        const stats = await this.memory.getStorageStats();
+        res.json({ success: true, stats });
+      } catch (error) {
+        console.error('Failed to get storage stats:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
   }
 
   setupSocketHandlers() {
@@ -198,7 +301,7 @@ class PhilosopherChatServer {
         const { conversationId, message } = data;
         
         try {
-          this.memory.addMessage('Human', message, conversationId, this.providers);
+          await this.memory.addMessage('Human', message, conversationId, this.providers);
           
           const messageData = {
             id: Date.now(),
@@ -249,6 +352,8 @@ class PhilosopherChatServer {
 
       socket.on('end-conversation', async (conversationId) => {
         try {
+          // End and save conversation
+          await this.memory.endConversation(conversationId);
           await this.generateConversationSummary(conversationId, socket);
         } catch (error) {
           console.error('Error generating summary:', error);
@@ -395,7 +500,7 @@ class PhilosopherChatServer {
         // Clean response of any participant labels
         const cleanResponse = this.cleanResponseText(response, provider.name);
         
-        this.memory.addMessage(provider.name, cleanResponse, conversationId, this.providers);
+        await this.memory.addMessage(provider.name, cleanResponse, conversationId, this.providers);
 
         const messageData = {
           id: Date.now() + Math.random(),
@@ -463,6 +568,7 @@ class PhilosopherChatServer {
       /^Meta AI:\s*/i,
       /^Watsonx:\s*/i,
       /^Grok:\s*/i,
+      /^Mistral:\s*/i,
       /^Human:\s*/i,
       /^\w+:\s*/
     ];

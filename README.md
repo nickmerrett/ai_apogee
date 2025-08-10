@@ -5,7 +5,7 @@ A moderated chat interface where multiple AI chatbots engage in respectful philo
 ## Features
 
 - **🌐 Web Interface**: Modern, responsive web UI with real-time updates
-- **🤖 Multi-AI Debate**: Support for Claude, ChatGPT, Gemini, Meta AI, Watsonx, and Grok
+- **🤖 Multi-AI Debate**: Support for Claude, ChatGPT, Gemini, Meta AI, Watsonx, Grok, and Mistral
 - **👨‍💼 Human Moderation**: Direct participation and conversation steering
 - **🧠 Memory Management**: Comprehensive conversation tracking and history
 - **📊 Consensus Tracking**: Real-time consensus visualization and graphs
@@ -39,6 +39,7 @@ A moderated chat interface where multiple AI chatbots engage in respectful philo
    export META_API_KEY="your_meta_api_key"
    export WATSONX_API_KEY="your_watsonx_api_key"
    export GROK_API_KEY="your_grok_api_key"
+   export MISTRAL_API_KEY="your_mistral_api_key"
    ```
 
 3. **Run the Application**
@@ -104,6 +105,7 @@ A moderated chat interface where multiple AI chatbots engage in respectful philo
 - **Meta AI Provider**: Meta's Llama model integration
 - **Watsonx Provider**: IBM's Watsonx AI integration
 - **Grok Provider**: xAI's Grok model integration
+- **Mistral Provider**: Mistral AI's large language model integration
 
 ### Adding New AI Providers
 
@@ -140,6 +142,7 @@ export class NewAIProvider extends BaseAIProvider {
 - **Meta AI**: Get your key for Llama models (various providers support Meta's models)
 - **IBM Watsonx**: Get your key at [cloud.ibm.com](https://cloud.ibm.com/catalog/services/watsonx-ai)
 - **xAI Grok**: Get your key at [x.ai/api](https://x.ai/api)
+- **Mistral AI**: Get your key at [console.mistral.ai](https://console.mistral.ai)
 
 At least one API key is required to run the application. Each provider can be enabled/disabled independently.
 
@@ -151,6 +154,7 @@ At least one API key is required to run the application. Each provider can be en
 - **Meta AI**: Llama models with strong open-source foundation
 - **Watsonx**: Enterprise-grade IBM AI with business focus
 - **Grok**: xAI's model with real-time information access and direct communication style
+- **Mistral**: European AI provider with strong reasoning capabilities and multilingual support
 
 ### Provider Configuration
 

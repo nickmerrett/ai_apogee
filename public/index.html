@@ -59,6 +59,21 @@
                         <span class="topic-tag" data-topic="What is the relationship between mind and reality?">Mind & Reality</span>
                     </div>
                 </div>
+
+                <div class="recent-conversations" id="recentConversations">
+                    <h3><i class="fas fa-history"></i> Recent Conversations</h3>
+                    <div class="recent-conversations-container" id="recentConversationsContainer">
+                        <div class="loading-recent">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            Loading recent conversations...
+                        </div>
+                    </div>
+                    <div class="recent-conversations-actions">
+                        <button id="viewAllHistoryBtn" class="secondary-btn">
+                            <i class="fas fa-list"></i> View All History
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -67,6 +82,9 @@
                 <h2 id="conversationTopic"></h2>
                 <div class="participants" id="participants"></div>
                 <div class="controls">
+                    <button id="historyBtn" class="control-btn">
+                        <i class="fas fa-history"></i> History
+                    </button>
                     <button id="nextRoundBtn" class="control-btn">
                         <i class="fas fa-forward"></i> Next Round
                     </button>
@@ -203,6 +221,45 @@
                         <i class="fas fa-download"></i> Download Summary
                     </button>
                     <button id="closeSummaryBtn" class="cancel-btn">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat History Modal -->
+        <div id="historyModal" class="modal" style="display: none;">
+            <div class="modal-content history-modal">
+                <div class="modal-header">
+                    <h3><i class="fas fa-history"></i> Conversation History</h3>
+                    <button id="closeHistoryModal" class="modal-close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="history-search">
+                        <div class="search-container">
+                            <input type="text" id="historySearch" placeholder="Search conversations..." class="search-input">
+                            <button id="searchBtn" class="search-btn">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <div class="history-stats" id="historyStats">
+                            Loading conversation statistics...
+                        </div>
+                    </div>
+                    <div id="conversationsList" class="conversations-list">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            Loading conversations...
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="newConversationBtn" class="apply-btn">
+                        <i class="fas fa-plus"></i> New Conversation
+                    </button>
+                    <button id="closeHistoryBtn" class="cancel-btn">
                         Close
                     </button>
                 </div>

@@ -1087,3 +1087,201 @@ body {
         max-width: 95%;
     }
 }
+
+/* Recent Conversations on Landing Page */
+.recent-conversations {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 15px;
+    padding: 25px;
+    margin-top: 30px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.recent-conversations h3 {
+    color: #4a5568;
+    font-size: 1.2em;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.recent-conversations h3 i {
+    color: #667eea;
+}
+
+.recent-conversations-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.recent-conversation-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+}
+
+.recent-conversation-card:hover {
+    border-color: #667eea;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+}
+
+.recent-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+    gap: 15px;
+}
+
+.recent-card-title {
+    flex: 1;
+}
+
+.recent-card-title h4 {
+    margin: 0;
+    font-size: 1.1em;
+    color: #2d3748;
+    font-weight: 600;
+    line-height: 1.3;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.resume-conversation-btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.resume-conversation-btn:hover {
+    background: #5a5fcf;
+    transform: scale(1.05);
+}
+
+.recent-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 12px;
+    font-size: 0.85em;
+    color: #718096;
+}
+
+.recent-card-meta span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.recent-card-meta i {
+    color: #667eea;
+    font-size: 0.9em;
+}
+
+.recent-card-preview {
+    font-size: 0.9em;
+    color: #4a5568;
+    line-height: 1.4;
+    background: #f7fafc;
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 3px solid #667eea;
+}
+
+.recent-conversations-actions {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.secondary-btn {
+    background: rgba(102, 126, 234, 0.1);
+    color: #667eea;
+    border: 2px solid #667eea;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 0.95em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.secondary-btn:hover {
+    background: #667eea;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.loading-recent {
+    text-align: center;
+    padding: 40px;
+    color: #718096;
+    font-size: 0.95em;
+}
+
+.loading-recent i {
+    margin-right: 8px;
+    color: #667eea;
+}
+
+/* Status Icons */
+.status-icon {
+    font-size: 0.9em;
+}
+
+.status-active {
+    color: #48bb78;
+}
+
+.status-ended {
+    color: #ed8936;
+}
+
+.status-resumed {
+    color: #667eea;
+}
+
+/* Responsive Design for Recent Conversations */
+@media (max-width: 768px) {
+    .recent-conversations-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .recent-card-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    
+    .resume-conversation-btn {
+        align-self: flex-start;
+    }
+    
+    .recent-card-meta {
+        gap: 10px;
+    }
+}

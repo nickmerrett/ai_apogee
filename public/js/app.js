@@ -15,6 +15,7 @@ class PhilosopherChatApp {
         this.setupEventListeners();
         this.connectSocket();
         this.checkProviderStatus();
+        this.loadRecentConversations();
     }
 
     setupEventListeners() {
@@ -50,6 +51,7 @@ class PhilosopherChatApp {
         document.getElementById('endConversationBtn').addEventListener('click', () => this.endConversation());
         document.getElementById('configBtn').addEventListener('click', () => this.showConfigModal());
         document.getElementById('exportBtn').addEventListener('click', () => this.exportConversation());
+        document.getElementById('historyBtn').addEventListener('click', () => this.showHistoryModal());
 
         document.getElementById('prevPage').addEventListener('click', () => this.changePage(-1));
         document.getElementById('nextPage').addEventListener('click', () => this.changePage(1));
@@ -76,6 +78,24 @@ class PhilosopherChatApp {
                 this.hideSummaryModal();
             }
         });
+
+        // History modal events
+        document.getElementById('closeHistoryModal').addEventListener('click', () => this.hideHistoryModal());
+        document.getElementById('closeHistoryBtn').addEventListener('click', () => this.hideHistoryModal());
+        document.getElementById('newConversationBtn').addEventListener('click', () => this.startNewConversation());
+        document.getElementById('searchBtn').addEventListener('click', () => this.searchConversations());
+        document.getElementById('historySearch').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.searchConversations();
+        });
+
+        document.getElementById('historyModal').addEventListener('click', (e) => {
+            if (e.target.id === 'historyModal') {
+                this.hideHistoryModal();
+            }
+        });
+
+        // Landing page history events
+        document.getElementById('viewAllHistoryBtn').addEventListener('click', () => this.showHistoryModal());
     }
 
     connectSocket() {
@@ -707,8 +727,330 @@ Academic Analysis Engine v2.0
 =====================================
 `;
     }
+
+    // Chat History Management Methods
+    async showHistoryModal() {
+        document.getElementById('historyModal').style.display = 'flex';
+        await this.loadConversationsList();
+        await this.loadHistoryStats();
+    }
+
+    hideHistoryModal() {
+        document.getElementById('historyModal').style.display = 'none';
+    }
+
+    async loadConversationsList() {
+        try {
+            const response = await fetch('/api/conversations');
+            const data = await response.json();
+            
+            if (data.success) {
+                this.displayConversationsList(data.conversations);
+            } else {
+                this.showNotification('Failed to load conversations', 'error');
+            }
+        } catch (error) {
+            console.error('Failed to load conversations:', error);
+            this.showNotification('Failed to load conversations', 'error');
+        }
+    }
+
+    displayConversationsList(conversations) {
+        const container = document.getElementById('conversationsList');
+        
+        if (!conversations || conversations.length === 0) {
+            container.innerHTML = `
+                <div class="no-conversations">
+                    <i class="fas fa-comments"></i>
+                    <h3>No conversations yet</h3>
+                    <p>Start your first philosophical debate to see it here.</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = conversations.map(conv => {
+            const lastMessagePreview = conv.lastMessage 
+                ? `${conv.lastMessage.speaker}: ${conv.lastMessage.content.substring(0, 100)}...`
+                : 'No messages yet';
+            
+            const statusIcon = {
+                'active': 'fa-play-circle',
+                'ended': 'fa-stop-circle',
+                'resumed': 'fa-redo-alt'
+            }[conv.status] || 'fa-question-circle';
+
+            const timeAgo = this.getTimeAgo(conv.createdAt);
+
+            return `
+                <div class="conversation-item" data-id="${conv.id}">
+                    <div class="conversation-header">
+                        <div class="conversation-title">
+                            <i class="fas ${statusIcon} status-icon status-${conv.status}"></i>
+                            <h4>${conv.topic}</h4>
+                        </div>
+                        <div class="conversation-actions">
+                            <button class="resume-btn" onclick="app.resumeConversation('${conv.id}')" title="Resume conversation">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <button class="delete-btn" onclick="app.deleteConversation('${conv.id}')" title="Delete conversation">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="conversation-meta">
+                        <span class="participants">
+                            <i class="fas fa-users"></i> ${conv.participants.join(', ')}
+                        </span>
+                        <span class="message-count">
+                            <i class="fas fa-comments"></i> ${conv.messageCount} messages
+                        </span>
+                        <span class="created-date">
+                            <i class="fas fa-clock"></i> ${timeAgo}
+                        </span>
+                    </div>
+                    <div class="conversation-preview">
+                        ${lastMessagePreview}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async loadHistoryStats() {
+        try {
+            const response = await fetch('/api/storage/stats');
+            const data = await response.json();
+            
+            if (data.success) {
+                this.displayHistoryStats(data.stats);
+            }
+        } catch (error) {
+            console.error('Failed to load history stats:', error);
+        }
+    }
+
+    displayHistoryStats(stats) {
+        const container = document.getElementById('historyStats');
+        const sizeInMB = (stats.storageSize / (1024 * 1024)).toFixed(2);
+        
+        container.innerHTML = `
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <i class="fas fa-comments"></i>
+                    <span class="stat-value">${stats.totalConversations}</span>
+                    <span class="stat-label">Conversations</span>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-comment"></i>
+                    <span class="stat-value">${stats.totalMessages}</span>
+                    <span class="stat-label">Messages</span>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-hdd"></i>
+                    <span class="stat-value">${sizeInMB} MB</span>
+                    <span class="stat-label">Storage Used</span>
+                </div>
+            </div>
+        `;
+    }
+
+    async searchConversations() {
+        const query = document.getElementById('historySearch').value.trim();
+        
+        if (!query) {
+            await this.loadConversationsList();
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/conversations/search?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.displayConversationsList(data.results);
+            } else {
+                this.showNotification('Search failed', 'error');
+            }
+        } catch (error) {
+            console.error('Search failed:', error);
+            this.showNotification('Search failed', 'error');
+        }
+    }
+
+    async resumeConversation(conversationId) {
+        try {
+            const response = await fetch(`/api/conversation/${conversationId}/resume`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                // Hide history modal
+                this.hideHistoryModal();
+                
+                // Update conversation state
+                this.conversationId = data.conversation.id;
+                this.allMessages = data.history || [];
+                
+                // Switch to main interface
+                document.getElementById('setupPanel').style.display = 'none';
+                document.getElementById('mainInterface').style.display = 'flex';
+                document.getElementById('conversationTopic').textContent = data.conversation.topic;
+                
+                // Display participants and messages
+                this.displayParticipants(data.conversation.participants);
+                this.displayMessages();
+                this.initializeAIControls();
+                
+                // Join the conversation room
+                this.socket.emit('join-conversation', this.conversationId);
+                
+                this.updateStatus('ready', 'Conversation resumed');
+                this.showNotification(`Resumed: ${data.conversation.topic}`, 'success');
+                
+            } else {
+                this.showNotification('Failed to resume conversation', 'error');
+            }
+        } catch (error) {
+            console.error('Failed to resume conversation:', error);
+            this.showNotification('Failed to resume conversation', 'error');
+        }
+    }
+
+    async deleteConversation(conversationId) {
+        if (!confirm('Are you sure you want to delete this conversation? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/conversation/${conversationId}`, {
+                method: 'DELETE'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showNotification('Conversation deleted', 'success');
+                await this.loadConversationsList();
+                await this.loadHistoryStats();
+            } else {
+                this.showNotification('Failed to delete conversation', 'error');
+            }
+        } catch (error) {
+            console.error('Failed to delete conversation:', error);
+            this.showNotification('Failed to delete conversation', 'error');
+        }
+    }
+
+    startNewConversation() {
+        this.hideHistoryModal();
+        // Reset to setup panel
+        document.getElementById('mainInterface').style.display = 'none';
+        document.getElementById('setupPanel').style.display = 'block';
+        document.getElementById('topicInput').value = '';
+        this.conversationId = null;
+        this.allMessages = [];
+    }
+
+    getTimeAgo(dateString) {
+        const now = new Date();
+        const date = new Date(dateString);
+        const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+        
+        if (diffInMinutes < 60) {
+            return `${diffInMinutes} minutes ago`;
+        } else if (diffInMinutes < 1440) {
+            const hours = Math.floor(diffInMinutes / 60);
+            return `${hours} hours ago`;
+        } else {
+            const days = Math.floor(diffInMinutes / 1440);
+            return `${days} days ago`;
+        }
+    }
+
+    // Landing Page Recent Conversations
+    async loadRecentConversations() {
+        try {
+            const response = await fetch('/api/conversations');
+            const data = await response.json();
+            
+            if (data.success) {
+                this.displayRecentConversations(data.conversations.slice(0, 3)); // Show only 3 most recent
+            } else {
+                this.hideRecentConversations();
+            }
+        } catch (error) {
+            console.error('Failed to load recent conversations:', error);
+            this.hideRecentConversations();
+        }
+    }
+
+    displayRecentConversations(conversations) {
+        const container = document.getElementById('recentConversationsContainer');
+        const section = document.getElementById('recentConversations');
+        
+        if (!conversations || conversations.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+        container.innerHTML = conversations.map(conv => {
+            const timeAgo = this.getTimeAgo(conv.createdAt);
+            const statusIcon = {
+                'active': 'fa-play-circle',
+                'ended': 'fa-stop-circle', 
+                'resumed': 'fa-redo-alt'
+            }[conv.status] || 'fa-question-circle';
+
+            const lastMessagePreview = conv.lastMessage 
+                ? `${conv.lastMessage.speaker}: ${conv.lastMessage.content.substring(0, 80)}...`
+                : 'No messages yet';
+
+            return `
+                <div class="recent-conversation-card" data-id="${conv.id}">
+                    <div class="recent-card-header">
+                        <div class="recent-card-title">
+                            <i class="fas ${statusIcon} status-icon status-${conv.status}"></i>
+                            <h4>${conv.topic}</h4>
+                        </div>
+                        <button class="resume-conversation-btn" onclick="app.resumeConversationFromLanding('${conv.id}')" title="Resume conversation">
+                            <i class="fas fa-play"></i>
+                            Resume
+                        </button>
+                    </div>
+                    <div class="recent-card-meta">
+                        <span class="participants-count">
+                            <i class="fas fa-users"></i> ${conv.participants.length} participants
+                        </span>
+                        <span class="message-count">
+                            <i class="fas fa-comments"></i> ${conv.messageCount} messages
+                        </span>
+                        <span class="time-ago">
+                            <i class="fas fa-clock"></i> ${timeAgo}
+                        </span>
+                    </div>
+                    <div class="recent-card-preview">
+                        ${lastMessagePreview}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    hideRecentConversations() {
+        document.getElementById('recentConversations').style.display = 'none';
+    }
+
+    // Resume conversation from landing page (wrapper method)
+    async resumeConversationFromLanding(conversationId) {
+        await this.resumeConversation(conversationId);
+    }
 }
 
+// Make app available globally for onclick handlers
+let app;
+
 document.addEventListener('DOMContentLoaded', () => {
-    new PhilosopherChatApp();
+    app = new PhilosopherChatApp();
 });

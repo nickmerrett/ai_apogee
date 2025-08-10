@@ -1,11 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { ConversationAnalytics } from './analytics.js';
+import { ConversationStorage } from './storage.js';
 
 export class ConversationMemory {
   constructor() {
     this.conversations = new Map();
     this.currentConversationId = null;
     this.analytics = new ConversationAnalytics();
+    this.storage = new ConversationStorage();
   }
 
   createConversation(topic, participants) {
@@ -24,7 +26,7 @@ export class ConversationMemory {
     return id;
   }
 
-  addMessage(speaker, content, conversationId = null, providers = []) {
+  async addMessage(speaker, content, conversationId = null, providers = []) {
     const id = conversationId || this.currentConversationId;
     if (!id || !this.conversations.has(id)) {
       throw new Error('No active conversation found');
@@ -42,6 +44,10 @@ export class ConversationMemory {
     message.analysis = analysis;
 
     conversation.history.push(message);
+    
+    // Auto-save conversation after each message
+    await this.saveConversation(id);
+    
     return message.id;
   }
 
@@ -154,5 +160,95 @@ export class ConversationMemory {
 
   getRecentInsights(limit = 10) {
     return this.analytics.getRecentInsights(limit);
+  }
+
+  // Persistent storage methods
+  async saveConversation(conversationId = null) {
+    const id = conversationId || this.currentConversationId;
+    if (!id || !this.conversations.has(id)) {
+      return false;
+    }
+
+    const conversation = this.conversations.get(id);
+    return await this.storage.saveConversation(conversation);
+  }
+
+  async loadConversation(conversationId) {
+    try {
+      const conversation = await this.storage.loadConversation(conversationId);
+      if (conversation) {
+        this.conversations.set(conversationId, conversation);
+        this.currentConversationId = conversationId;
+        
+        // Restore analytics from conversation history
+        this.analytics = new ConversationAnalytics();
+        conversation.history.forEach(message => {
+          if (message.content && message.speaker) {
+            // Re-analyze each message to rebuild analytics state
+            this.analytics.analyzeMessage(message.content, message.speaker, []);
+          }
+        });
+        
+        console.log(`📖 Loaded and restored conversation: ${conversationId}`);
+        return conversation;
+      }
+      return null;
+    } catch (error) {
+      console.error(`❌ Failed to load conversation ${conversationId}:`, error);
+      return null;
+    }
+  }
+
+  async getAllConversations() {
+    return await this.storage.getAllConversations();
+  }
+
+  async searchStoredConversations(query) {
+    return await this.storage.searchConversations(query);
+  }
+
+  async deleteConversation(conversationId) {
+    // Remove from memory
+    if (this.conversations.has(conversationId)) {
+      this.conversations.delete(conversationId);
+      if (this.currentConversationId === conversationId) {
+        this.currentConversationId = null;
+      }
+    }
+    
+    // Remove from storage
+    return await this.storage.deleteConversation(conversationId);
+  }
+
+  async getStorageStats() {
+    return await this.storage.getStorageStats();
+  }
+
+  // Resume conversation functionality
+  async resumeConversation(conversationId) {
+    const conversation = await this.loadConversation(conversationId);
+    if (conversation) {
+      conversation.status = 'resumed';
+      conversation.resumedAt = new Date().toISOString();
+      await this.saveConversation(conversationId);
+      return conversation;
+    }
+    return null;
+  }
+
+  // End conversation and save final state
+  async endConversation(conversationId = null) {
+    const id = conversationId || this.currentConversationId;
+    if (!id || !this.conversations.has(id)) {
+      return false;
+    }
+
+    const conversation = this.conversations.get(id);
+    conversation.status = 'ended';
+    conversation.endedAt = new Date().toISOString();
+    
+    await this.saveConversation(id);
+    console.log(`✅ Ended and saved conversation: ${id}`);
+    return true;
   }
 }
