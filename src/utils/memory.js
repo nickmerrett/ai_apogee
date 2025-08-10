@@ -6,7 +6,7 @@ export class ConversationMemory {
   constructor() {
     this.conversations = new Map();
     this.currentConversationId = null;
-    this.analytics = new ConversationAnalytics();
+    this.conversationAnalytics = new Map(); // Map of conversation ID -> analytics instance
     this.storage = new ConversationStorage();
   }
 
@@ -23,6 +23,11 @@ export class ConversationMemory {
     
     this.conversations.set(id, conversation);
     this.currentConversationId = id;
+    
+    // Create a fresh analytics instance for this conversation
+    this.conversationAnalytics.set(id, new ConversationAnalytics());
+    console.log(`🧠 Created new analytics instance for conversation: ${id}`);
+    
     return id;
   }
 
@@ -33,6 +38,12 @@ export class ConversationMemory {
     }
 
     const conversation = this.conversations.get(id);
+    const analytics = this.conversationAnalytics.get(id);
+    
+    if (!analytics) {
+      throw new Error('No analytics instance found for conversation');
+    }
+
     const message = {
       id: uuidv4(),
       speaker,
@@ -40,7 +51,7 @@ export class ConversationMemory {
       timestamp: new Date().toISOString()
     };
 
-    const analysis = this.analytics.analyzeMessage(content, speaker, providers);
+    const analysis = analytics.analyzeMessage(content, speaker, providers);
     message.analysis = analysis;
 
     conversation.history.push(message);
@@ -142,24 +153,64 @@ export class ConversationMemory {
   }
 
   async updateConsensus(providers = []) {
+    const id = this.currentConversationId;
+    if (!id) throw new Error('No active conversation');
+    
+    const analytics = this.conversationAnalytics.get(id);
+    if (!analytics) throw new Error('No analytics instance found');
+    
     const history = this.getConversationHistory();
-    return await this.analytics.calculateConsensus(history, providers);
+    return await analytics.calculateConsensus(history, providers);
   }
 
   getAnalytics() {
-    return this.analytics.exportAnalytics();
+    const id = this.currentConversationId;
+    if (!id) return null;
+    
+    const analytics = this.conversationAnalytics.get(id);
+    if (!analytics) return null;
+    
+    return analytics.exportAnalytics();
   }
 
   getConsensusGraph() {
-    return this.analytics.getConsensusGraph();
+    const id = this.currentConversationId;
+    if (!id) return [];
+    
+    const analytics = this.conversationAnalytics.get(id);
+    if (!analytics) return [];
+    
+    return analytics.getConsensusGraph();
   }
 
   getTopThemes(limit = 5) {
-    return this.analytics.getTopThemes(limit);
+    const id = this.currentConversationId;
+    if (!id) return [];
+    
+    const analytics = this.conversationAnalytics.get(id);
+    if (!analytics) return [];
+    
+    return analytics.getTopThemes(limit);
   }
 
   getRecentInsights(limit = 10) {
-    return this.analytics.getRecentInsights(limit);
+    const id = this.currentConversationId;
+    if (!id) return [];
+    
+    const analytics = this.conversationAnalytics.get(id);
+    if (!analytics) return [];
+    
+    return analytics.getRecentInsights(limit);
+  }
+
+  getWordMap(limit = 30) {
+    const id = this.currentConversationId;
+    if (!id) return [];
+    
+    const analytics = this.conversationAnalytics.get(id);
+    if (!analytics) return [];
+    
+    return analytics.getWordMap(limit);
   }
 
   // Persistent storage methods
@@ -180,14 +231,15 @@ export class ConversationMemory {
         this.conversations.set(conversationId, conversation);
         this.currentConversationId = conversationId;
         
-        // Restore analytics from conversation history
-        this.analytics = new ConversationAnalytics();
+        // Create and restore analytics from conversation history
+        const analytics = new ConversationAnalytics();
         conversation.history.forEach(message => {
           if (message.content && message.speaker) {
             // Re-analyze each message to rebuild analytics state
-            this.analytics.analyzeMessage(message.content, message.speaker, []);
+            analytics.analyzeMessage(message.content, message.speaker, []);
           }
         });
+        this.conversationAnalytics.set(conversationId, analytics);
         
         console.log(`📖 Loaded and restored conversation: ${conversationId}`);
         return conversation;
@@ -211,6 +263,7 @@ export class ConversationMemory {
     // Remove from memory
     if (this.conversations.has(conversationId)) {
       this.conversations.delete(conversationId);
+      this.conversationAnalytics.delete(conversationId); // Clean up analytics
       if (this.currentConversationId === conversationId) {
         this.currentConversationId = null;
       }

@@ -383,6 +383,54 @@ body {
     color: #5a67d8;
 }
 
+.moderation-pause-indicator {
+    background: #fff8e1;
+    border: 2px solid #ffb74d;
+    color: #e65100;
+    padding: 15px 20px;
+    border-radius: 12px;
+    margin: 15px 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 0.95em;
+    animation: fadeIn 0.5s ease-out;
+    box-shadow: 0 4px 12px rgba(255, 183, 77, 0.2);
+}
+
+.moderation-pause-indicator i {
+    color: #ff9800;
+    font-size: 1.5em;
+    flex-shrink: 0;
+}
+
+.pause-content {
+    flex: 1;
+}
+
+.pause-title {
+    font-weight: 600;
+    color: #e65100;
+    margin-bottom: 5px;
+}
+
+.pause-suggestion {
+    color: #f57c00;
+    font-style: italic;
+    margin-bottom: 5px;
+    font-size: 0.9em;
+}
+
+.pause-stats {
+    color: #ef6c00;
+    font-size: 0.85em;
+    font-weight: 500;
+}
+
+.notification.warning {
+    border-left-color: #ff9800;
+}
+
 @keyframes slideIn {
     from {
         transform: translateX(100%);
@@ -1284,4 +1332,71 @@ body {
     .recent-card-meta {
         gap: 10px;
     }
+}
+
+/* Unique Ideas & Concepts Styling */
+.unique-idea-item {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 12px;
+    border-left: 4px solid #667eea;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+}
+
+.unique-idea-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.idea-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.idea-type {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85em;
+    color: #667eea;
+    font-weight: 500;
+}
+
+.idea-type i {
+    font-size: 1.1em;
+}
+
+.type-label {
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 0.8em;
+}
+
+.recurrence-badge {
+    background: #667eea;
+    color: white;
+    font-size: 0.7em;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    margin-left: 6px;
+}
+
+.idea-name {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.idea-summary {
+    font-size: 0.9em;
+    color: #4a5568;
+    line-height: 1.5;
+    font-style: italic;
 }

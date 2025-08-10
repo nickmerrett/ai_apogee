@@ -18,7 +18,7 @@ export class ConversationAnalytics {
       sentiment: this.analyzeSentiment(message)
     };
 
-    this.updateThemes(analysis.themes, message);
+    this.updateUniqueIdeas(analysis.themes, message);
     this.updateWordFrequency(message);
     this.messageContext.push({ message, speaker, timestamp: analysis.timestamp });
     this.insights.push(...analysis.insights);
@@ -32,37 +32,186 @@ export class ConversationAnalytics {
   }
 
   extractThemes(text) {
-    const themePatterns = [
-      { name: 'Consciousness', keywords: ['conscious', 'awareness', 'experience', 'subjective', 'qualia'] },
-      { name: 'Free Will', keywords: ['choice', 'freedom', 'determinism', 'agency', 'decision'] },
-      { name: 'Reality', keywords: ['reality', 'existence', 'being', 'truth', 'perception'] },
-      { name: 'Ethics', keywords: ['moral', 'ethical', 'right', 'wrong', 'virtue', 'duty'] },
-      { name: 'Knowledge', keywords: ['knowledge', 'truth', 'belief', 'epistem', 'certainty'] },
-      { name: 'Mind', keywords: ['mind', 'thought', 'cognition', 'mental', 'brain'] },
-      { name: 'Identity', keywords: ['self', 'identity', 'person', 'individual', 'who'] },
-      { name: 'Technology', keywords: ['ai', 'technology', 'artificial', 'machine', 'digital'] },
-      { name: 'Society', keywords: ['society', 'social', 'community', 'culture', 'human'] },
-      { name: 'Meaning', keywords: ['meaning', 'purpose', 'significance', 'value', 'worth'] }
+    // Extract unique ideas and concepts from the text
+    const uniqueIdeas = [];
+    
+    // Look for philosophical concepts, novel ideas, and key arguments
+    const ideaPatterns = [
+      // Conceptual markers - captures concepts introduced
+      { 
+        regex: /(?:the (?:idea|concept|notion|principle) (?:that|of))\s+([^.,;!?]{10,80})/gi,
+        type: 'concept'
+      },
+      // Arguments and propositions
+      { 
+        regex: /(?:I (?:propose|argue|suggest|contend|believe)|consider that|what if|suppose that)\s+([^.,;!?]{15,100})/gi,
+        type: 'argument'
+      },
+      // Definitions and explanations
+      { 
+        regex: /(?:\b\w+\b)\s+(?:means|refers to|can be understood as|is defined as)\s+([^.,;!?]{10,80})/gi,
+        type: 'definition'
+      },
+      // Hypothetical scenarios and thought experiments
+      { 
+        regex: /(?:imagine|suppose|consider|if we|let's say)\s+([^.,;!?]{20,120})/gi,
+        type: 'thought_experiment'
+      },
+      // Key insights and realizations
+      { 
+        regex: /(?:insight|realization|understanding|revelation|discovery)(?:\s+is)?\s+(?:that\s+)?([^.,;!?]{15,100})/gi,
+        type: 'insight'
+      },
+      // Philosophical frameworks and models
+      { 
+        regex: /(?:framework|model|theory|approach|methodology)(?:\s+(?:of|for|to))?\s+([^.,;!?]{10,80})/gi,
+        type: 'framework'
+      },
+      // Paradoxes and contradictions
+      { 
+        regex: /(?:paradox|contradiction|dilemma|tension)(?:\s+(?:of|in|between))?\s+([^.,;!?]{10,80})/gi,
+        type: 'paradox'
+      },
+      // Novel connections and relationships
+      { 
+        regex: /(?:connection|relationship|link|parallel) between\s+([^.,;!?]{15,100})/gi,
+        type: 'connection'
+      },
+      // Questions that reveal new dimensions
+      { 
+        regex: /(?:what if|why (?:is|does)|how (?:can|might|does))\s+([^.,;!?]{15,100})/gi,
+        type: 'question'
+      }
     ];
 
-    const foundThemes = [];
-    const lowerText = text.toLowerCase();
-
-    themePatterns.forEach(theme => {
-      const matches = theme.keywords.filter(keyword => 
-        lowerText.includes(keyword.toLowerCase())
-      ).length;
-      
-      if (matches > 0) {
-        foundThemes.push({
-          name: theme.name,
-          strength: matches / theme.keywords.length,
-          keywords: theme.keywords.filter(k => lowerText.includes(k.toLowerCase()))
-        });
+    // Extract ideas using patterns
+    ideaPatterns.forEach(pattern => {
+      let match;
+      while ((match = pattern.regex.exec(text)) !== null) {
+        const idea = match[1].trim();
+        if (idea.length > 10) { // Filter out very short matches
+          uniqueIdeas.push({
+            text: this.cleanIdeaText(idea),
+            type: pattern.type,
+            context: match[0],
+            strength: this.calculateIdeaStrength(idea, text)
+          });
+        }
       }
     });
 
-    return foundThemes.sort((a, b) => b.strength - a.strength);
+    // Also extract key noun phrases that might represent concepts
+    const nounPhrases = this.extractKeyNounPhrases(text);
+    nounPhrases.forEach(phrase => {
+      uniqueIdeas.push({
+        text: phrase,
+        type: 'key_concept',
+        context: `Key concept: ${phrase}`,
+        strength: 0.7
+      });
+    });
+
+    // Remove duplicates and rank by relevance
+    const deduplicated = this.deduplicateIdeas(uniqueIdeas);
+    
+    return deduplicated
+      .sort((a, b) => b.strength - a.strength)
+      .slice(0, 10); // Limit to top 10 most relevant ideas
+  }
+
+  cleanIdeaText(text) {
+    return text
+      .replace(/^(that|the|a|an)\s+/i, '') // Remove leading articles
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
+  }
+
+  calculateIdeaStrength(idea, fullText) {
+    const ideaWords = idea.toLowerCase().split(/\s+/);
+    const textWords = fullText.toLowerCase().split(/\s+/);
+    
+    // Base strength on idea length and specificity
+    let strength = Math.min(ideaWords.length / 10, 1.0);
+    
+    // Boost for philosophical keywords
+    const philosophicalWords = ['existence', 'consciousness', 'reality', 'truth', 'knowledge', 'being', 'mind', 'self', 'freedom', 'choice', 'moral', 'ethical', 'meaning', 'purpose'];
+    const philosophicalCount = ideaWords.filter(word => 
+      philosophicalWords.some(pw => word.includes(pw))
+    ).length;
+    strength += philosophicalCount * 0.2;
+    
+    // Boost for uniqueness (less common words)
+    const commonWords = ['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with', 'by'];
+    const uniqueWords = ideaWords.filter(word => 
+      !commonWords.includes(word) && word.length > 3
+    ).length;
+    strength += uniqueWords * 0.1;
+    
+    return Math.min(strength, 1.0);
+  }
+
+  extractKeyNounPhrases(text) {
+    // Simple noun phrase extraction - look for capitalized phrases and technical terms
+    const nounPhrasePatterns = [
+      // Capitalized phrases (potential proper nouns or important concepts)
+      /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g,
+      // Technical or domain-specific terms (words with specific suffixes)
+      /\b\w*(?:ism|ity|tion|ness|ment|ology)\b/g,
+      // Compound philosophical terms
+      /\b(?:meta|pseudo|proto|quasi|semi)-\w+/g
+    ];
+
+    const phrases = new Set();
+    
+    nounPhrasePatterns.forEach(pattern => {
+      const matches = text.match(pattern) || [];
+      matches.forEach(match => {
+        if (match.length > 4 && match.length < 50) {
+          phrases.add(match);
+        }
+      });
+    });
+
+    return Array.from(phrases).slice(0, 5); // Limit to 5 key phrases
+  }
+
+  deduplicateIdeas(ideas) {
+    const seen = new Set();
+    const deduplicated = [];
+    
+    ideas.forEach(idea => {
+      // Create a normalized version for comparison
+      const normalized = idea.text.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      // Check for similarity with existing ideas
+      let isDuplicate = false;
+      for (const seenText of seen) {
+        if (this.calculateSimilarity(normalized, seenText) > 0.8) {
+          isDuplicate = true;
+          break;
+        }
+      }
+      
+      if (!isDuplicate) {
+        seen.add(normalized);
+        deduplicated.push(idea);
+      }
+    });
+    
+    return deduplicated;
+  }
+
+  calculateSimilarity(text1, text2) {
+    const words1 = new Set(text1.split(/\s+/));
+    const words2 = new Set(text2.split(/\s+/));
+    
+    const intersection = new Set([...words1].filter(x => words2.has(x)));
+    const union = new Set([...words1, ...words2]);
+    
+    return intersection.size / union.size;
   }
 
   extractInsights(text) {
@@ -110,6 +259,63 @@ export class ConversationAnalytics {
     if (score > 0) return 'positive';
     if (score < 0) return 'negative';
     return 'neutral';
+  }
+
+  updateUniqueIdeas(ideas, messageContext = '') {
+    ideas.forEach(idea => {
+      const ideaKey = `${idea.type}:${idea.text.toLowerCase().substring(0, 50)}`;
+      const existing = this.themes.get(ideaKey) || { 
+        count: 0, 
+        totalStrength: 0, 
+        text: idea.text,
+        type: idea.type,
+        contexts: [],
+        relatedSpeakers: new Set(),
+        summary: idea.text,
+        firstIntroduced: new Date().toISOString()
+      };
+      
+      existing.count += 1;
+      existing.totalStrength += idea.strength;
+      
+      // Track context and speakers
+      if (messageContext && messageContext.length > 0) {
+        const contextSnippet = messageContext.substring(0, 200);
+        existing.contexts.push({
+          snippet: contextSnippet,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Update summary with new context if this is a recurring idea
+        if (existing.count > 1) {
+          existing.summary = this.generateIdeaSummary(idea, existing.contexts);
+        }
+      }
+      
+      this.themes.set(ideaKey, existing);
+    });
+  }
+
+  generateIdeaSummary(idea, contexts) {
+    if (contexts.length <= 1) {
+      return idea.text;
+    }
+    
+    const typeDescriptions = {
+      'concept': 'This concept has been explored',
+      'argument': 'This argument has been developed',
+      'definition': 'This definition has been discussed',
+      'thought_experiment': 'This thought experiment has been considered',
+      'insight': 'This insight has emerged',
+      'framework': 'This framework has been applied',
+      'paradox': 'This paradox has been examined',
+      'connection': 'This connection has been drawn',
+      'question': 'This question has been raised',
+      'key_concept': 'This key concept has appeared'
+    };
+    
+    const description = typeDescriptions[idea.type] || 'This idea has been mentioned';
+    return `${description} ${contexts.length} times in the discussion: "${idea.text}"`;
   }
 
   updateThemes(newThemes, messageContext = '') {
@@ -441,13 +647,37 @@ export class ConversationAnalytics {
 
   getTopThemes(limit = 5) {
     return Array.from(this.themes.entries())
-      .map(([name, data]) => ({
-        name,
-        averageStrength: data.totalStrength / data.count,
-        keywords: Array.from(data.keywords),
-        summary: data.summary || this.generateThematicSummary(name, new Set(), data.contexts || [])
-      }))
-      .sort((a, b) => b.averageStrength - a.averageStrength) // Sort by strength rather than count
+      .map(([key, data]) => {
+        // Handle both old theme format and new unique ideas format
+        if (data.text && data.type) {
+          // New unique ideas format
+          return {
+            name: data.text,
+            type: data.type,
+            averageStrength: data.totalStrength / data.count,
+            count: data.count,
+            summary: data.summary,
+            firstIntroduced: data.firstIntroduced
+          };
+        } else {
+          // Legacy theme format (fallback)
+          return {
+            name: key,
+            type: 'legacy_theme',
+            averageStrength: data.totalStrength / data.count,
+            count: data.count,
+            keywords: Array.from(data.keywords || []),
+            summary: data.summary || key
+          };
+        }
+      })
+      .sort((a, b) => {
+        // Sort by count first (recurring ideas are more important), then by strength
+        if (a.count !== b.count) {
+          return b.count - a.count;
+        }
+        return b.averageStrength - a.averageStrength;
+      })
       .slice(0, limit);
   }
 

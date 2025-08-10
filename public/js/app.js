@@ -162,6 +162,11 @@ class PhilosopherChatApp {
             this.updateAIStatus(data.message);
         });
 
+        this.socket.on('moderation-pause', (data) => {
+            this.showModerationPauseNotification(data);
+            this.updateAIStatus(data.message);
+        });
+
         this.socket.on('random-selection', (data) => {
             this.showRandomSelectionNotification(data);
             this.updateAIStatus('Random selection: ' + data.message.replace('🎲 ', ''));
@@ -201,7 +206,8 @@ class PhilosopherChatApp {
         const config = {
             maxTokens: parseInt(document.getElementById('maxTokens').value),
             temperature: parseFloat(document.getElementById('temperature').value),
-            autoRounds: document.getElementById('autoRounds').checked
+            autoRounds: document.getElementById('autoRounds').checked,
+            moderationPause: parseInt(document.getElementById('moderationPause').value)
         };
 
         try {
@@ -392,16 +398,53 @@ class PhilosopherChatApp {
         const container = document.getElementById('themesContainer');
         
         if (!themes || themes.length === 0) {
-            container.innerHTML = '<div class="no-data">No themes detected yet...</div>';
+            container.innerHTML = '<div class="no-data">No unique ideas detected yet...</div>';
             return;
         }
 
-        container.innerHTML = themes.map(theme => `
-            <div class="theme-item">
-                <div class="theme-name">${theme.name}</div>
-                <div class="theme-summary">${theme.summary}</div>
-            </div>
-        `).join('');
+        container.innerHTML = themes.map(theme => {
+            const typeIcon = {
+                'concept': 'fa-lightbulb',
+                'argument': 'fa-balance-scale',
+                'definition': 'fa-book',
+                'thought_experiment': 'fa-flask',
+                'insight': 'fa-eye',
+                'framework': 'fa-sitemap',
+                'paradox': 'fa-question-circle',
+                'connection': 'fa-link',
+                'question': 'fa-question',
+                'key_concept': 'fa-key',
+                'legacy_theme': 'fa-tag'
+            }[theme.type] || 'fa-comment';
+
+            const typeLabel = {
+                'concept': 'Concept',
+                'argument': 'Argument',
+                'definition': 'Definition',
+                'thought_experiment': 'Thought Experiment',
+                'insight': 'Insight',
+                'framework': 'Framework',
+                'paradox': 'Paradox',
+                'connection': 'Connection',
+                'question': 'Question',
+                'key_concept': 'Key Concept',
+                'legacy_theme': 'Theme'
+            }[theme.type] || 'Idea';
+
+            return `
+                <div class="unique-idea-item">
+                    <div class="idea-header">
+                        <div class="idea-type">
+                            <i class="fas ${typeIcon}"></i>
+                            <span class="type-label">${typeLabel}</span>
+                            ${theme.count > 1 ? `<span class="recurrence-badge">${theme.count}x</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="idea-name">${theme.name}</div>
+                    <div class="idea-summary">${theme.summary}</div>
+                </div>
+            `;
+        }).join('');
     }
 
     updateWordMap(wordMap) {
@@ -477,6 +520,7 @@ class PhilosopherChatApp {
         document.getElementById('modalTemperature').value = currentConfig.temperature;
         document.getElementById('modalTempValue').textContent = currentConfig.temperature;
         document.getElementById('modalAutoRounds').checked = currentConfig.autoRounds;
+        document.getElementById('modalModerationPause').value = currentConfig.moderationPause;
 
         document.getElementById('configModal').style.display = 'flex';
     }
@@ -489,7 +533,8 @@ class PhilosopherChatApp {
         return {
             maxTokens: 300,
             temperature: 0.7,
-            autoRounds: true
+            autoRounds: true,
+            moderationPause: 4
         };
     }
 
@@ -497,7 +542,8 @@ class PhilosopherChatApp {
         const config = {
             maxTokens: parseInt(document.getElementById('modalMaxTokens').value),
             temperature: parseFloat(document.getElementById('modalTemperature').value),
-            autoRounds: document.getElementById('modalAutoRounds').checked
+            autoRounds: document.getElementById('modalAutoRounds').checked,
+            moderationPause: parseInt(document.getElementById('modalModerationPause').value)
         };
 
         if (!this.conversationId) {
@@ -535,6 +581,7 @@ class PhilosopherChatApp {
             'info': 'fa-info-circle',
             'success': 'fa-check-circle',
             'error': 'fa-exclamation-circle',
+            'warning': 'fa-exclamation-triangle',
             'auto-round': 'fa-sync-alt'
         }[type] || 'fa-info-circle';
 
@@ -574,6 +621,32 @@ class PhilosopherChatApp {
 
         // Also show as notification
         this.showNotification(data.message, 'auto-round');
+    }
+
+    showModerationPauseNotification(data) {
+        const chatContainer = document.getElementById('chatContainer');
+        const indicator = document.createElement('div');
+        indicator.className = 'moderation-pause-indicator';
+        indicator.innerHTML = `
+            <i class="fas fa-pause-circle"></i>
+            <div class="pause-content">
+                <div class="pause-title">${data.message}</div>
+                <div class="pause-suggestion">${data.suggestion}</div>
+                <div class="pause-stats">Consecutive AI messages: ${data.consecutiveMessages}</div>
+            </div>
+        `;
+        chatContainer.appendChild(indicator);
+        this.scrollToBottom();
+        
+        // Remove after 15 seconds (longer than auto-round since it's important)
+        setTimeout(() => {
+            if (indicator.parentNode) {
+                indicator.parentNode.removeChild(indicator);
+            }
+        }, 15000);
+        
+        // Also show as notification
+        this.showNotification(data.message, 'warning');
     }
 
     showRandomSelectionNotification(data) {
