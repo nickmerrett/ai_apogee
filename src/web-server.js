@@ -47,6 +47,7 @@ class PhilosopherChatServer {
     this.autoRoundCounts = new Map();
     this.consecutiveAIMessages = new Map(); // Track consecutive AI messages
     this.conversationActiveProviders = new Map();
+    this.processingLocks = new Map(); // Prevent multiple simultaneous processAIResponses calls
     
     this.setupProviders();
     this.setupMiddleware();
@@ -185,7 +186,8 @@ class PhilosopherChatServer {
       this.conversationConfigs.set(conversationId, {
         maxTokens: config.maxTokens || 300,
         temperature: config.temperature || 0.7,
-        autoRounds: config.autoRounds !== false // Default to true
+        autoRounds: config.autoRounds === true, // Use explicit boolean
+        moderationPause: config.moderationPause || 4
       });
       
       this.autoRoundCounts.set(conversationId, 0);
@@ -205,11 +207,14 @@ class PhilosopherChatServer {
       this.setupProviders(config);
       
       // Update conversation config
-      this.conversationConfigs.set(conversationId, {
+      const newConfig = {
         maxTokens: config.maxTokens || 300,
         temperature: config.temperature || 0.7,
-        autoRounds: config.autoRounds !== false
-      });
+        autoRounds: config.autoRounds === true,
+        moderationPause: config.moderationPause || 4
+      };
+      
+      this.conversationConfigs.set(conversationId, newConfig);
       
       res.json({ success: true, config: this.conversationConfigs.get(conversationId) });
     });
@@ -250,7 +255,8 @@ class PhilosopherChatServer {
           this.conversationConfigs.set(conversationId, {
             maxTokens: 300,
             temperature: 0.7,
-            autoRounds: true
+            autoRounds: true,
+            moderationPause: 4
           });
           
           this.autoRoundCounts.set(conversationId, 0);
@@ -416,17 +422,26 @@ class PhilosopherChatServer {
   }
 
   async processAIResponses(conversationId, targetedProvider = null) {
-    if (this.providers.length === 0) {
-      this.io.to(conversationId).emit('demo-response', {
-        message: 'Demo mode: AI providers would respond here with actual API keys'
-      });
+    // Prevent multiple simultaneous executions for the same conversation
+    if (this.processingLocks.get(conversationId)) {
       return;
     }
+    
+    this.processingLocks.set(conversationId, true);
+    
+    try {
+      if (this.providers.length === 0) {
+        this.io.to(conversationId).emit('demo-response', {
+          message: 'Demo mode: AI providers would respond here with actual API keys'
+        });
+        return;
+      }
 
     const history = this.memory.getConversationHistory(conversationId);
     const conversation = this.memory.getCurrentConversation();
     const config = this.conversationConfigs.get(conversationId) || {};
     const activeProviders = this.conversationActiveProviders.get(conversationId) || new Set();
+    
     
     if (!conversation) return;
 
@@ -530,7 +545,38 @@ class PhilosopherChatServer {
       }
     }
 
+    // Check for moderation pause BEFORE generating responses
+    const currentConsecutiveAI = this.consecutiveAIMessages.get(conversationId) || 0;
+    const moderationPauseThreshold = config.moderationPause || 4;
+    
+
+    if (currentConsecutiveAI >= moderationPauseThreshold) {
+      console.log(`Moderation pause triggered for conversation ${conversationId}: ${currentConsecutiveAI} messages (threshold: ${moderationPauseThreshold})`);
+      this.io.to(conversationId).emit('moderation-pause', {
+        consecutiveMessages: currentConsecutiveAI,
+        threshold: moderationPauseThreshold,
+        message: `💬 ${currentConsecutiveAI} consecutive AI messages. Pausing for moderator input...`,
+        suggestion: 'Add your perspective, ask a follow-up question, or steer the discussion in a new direction.'
+      });
+      return; // Stop automatic responses - wait for human input
+    }
+
+    // Process providers ONE AT A TIME to check moderation threshold between each
     for (const provider of providersToUse) {
+      // Check moderation threshold BEFORE each provider response
+      const currentCount = this.consecutiveAIMessages.get(conversationId) || 0;
+      
+      if (currentCount >= moderationPauseThreshold) {
+        console.log(`Moderation pause triggered mid-round for conversation ${conversationId}: ${currentCount} messages (threshold: ${moderationPauseThreshold})`);
+        this.io.to(conversationId).emit('moderation-pause', {
+          consecutiveMessages: currentCount,
+          threshold: moderationPauseThreshold,
+          message: `💬 ${currentCount} consecutive AI messages. Pausing for moderator input...`,
+          suggestion: 'Add your perspective, ask a follow-up question, or steer the discussion in a new direction.'
+        });
+        return;
+      }
+
       try {
         this.io.to(conversationId).emit('ai-thinking', { 
           provider: provider.name 
@@ -575,6 +621,9 @@ class PhilosopherChatServer {
           wordMap: analytics.wordMap
         });
 
+        // Track this AI response AFTER it's completed
+        this.consecutiveAIMessages.set(conversationId, currentCount + 1);
+
         // Add some randomness to response delays too (3-6 seconds)
         const randomDelay = 3000 + Math.floor(Math.random() * 3000);
         await new Promise(resolve => setTimeout(resolve, randomDelay));
@@ -588,27 +637,10 @@ class PhilosopherChatServer {
       }
     }
 
-    // Track consecutive AI messages
-    const currentConsecutiveAI = this.consecutiveAIMessages.get(conversationId) || 0;
-    this.consecutiveAIMessages.set(conversationId, currentConsecutiveAI + providersToUse.length);
-
-    // Check for moderation pause (4-5 consecutive AI messages)
-    const updatedConsecutiveAI = this.consecutiveAIMessages.get(conversationId);
-    const moderationPauseThreshold = config.moderationPause || 4; // Default to 4, allow 5
-
-    if (updatedConsecutiveAI >= moderationPauseThreshold) {
-      this.io.to(conversationId).emit('moderation-pause', {
-        consecutiveMessages: updatedConsecutiveAI,
-        threshold: moderationPauseThreshold,
-        message: `💬 ${updatedConsecutiveAI} consecutive AI messages. Pausing for moderator input...`,
-        suggestion: 'Add your perspective, ask a follow-up question, or steer the discussion in a new direction.'
-      });
-      return; // Stop automatic responses - wait for human input
-    }
-
     // Check for traditional auto-rounds (if enabled)
-    if (config.autoRounds !== false) {
+    if (config.autoRounds === true) {
       const currentAutoRounds = this.autoRoundCounts.get(conversationId) || 0;
+      const consecutiveAI = this.consecutiveAIMessages.get(conversationId) || 0;
       
       if (currentAutoRounds < 2) {
         this.autoRoundCounts.set(conversationId, currentAutoRounds + 1);
@@ -616,8 +648,8 @@ class PhilosopherChatServer {
         this.io.to(conversationId).emit('auto-round-notification', {
           current: currentAutoRounds + 1,
           max: 2,
-          consecutiveAI: updatedConsecutiveAI,
-          message: `Auto-round ${currentAutoRounds + 1}/2 - AIs continuing discussion... (${updatedConsecutiveAI} consecutive AI messages)`
+          consecutiveAI: consecutiveAI,
+          message: `Auto-round ${currentAutoRounds + 1}/2 - AIs continuing discussion... (${consecutiveAI} consecutive AI messages)`
         });
 
         // Continue with another round after a delay
@@ -629,6 +661,10 @@ class PhilosopherChatServer {
           message: 'Auto-rounds complete. Waiting for human input to continue...'
         });
       }
+    }
+    } finally {
+      // Always release the lock
+      this.processingLocks.delete(conversationId);
     }
   }
 

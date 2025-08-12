@@ -7,6 +7,12 @@ class PhilosopherChatApp {
         this.allMessages = [];
         this.availableProviders = [];
         this.activeProviders = new Set();
+        this.currentConfig = {
+            maxTokens: 300,
+            temperature: 0.7,
+            autoRounds: true,
+            moderationPause: 4
+        };
         
         this.init();
     }
@@ -226,6 +232,7 @@ class PhilosopherChatApp {
 
             const data = await response.json();
             this.conversationId = data.conversationId;
+            this.currentConfig = config; // Store the initial config
 
             document.getElementById('setupPanel').style.display = 'none';
             document.getElementById('mainInterface').style.display = 'flex';
@@ -574,12 +581,7 @@ class PhilosopherChatApp {
     }
 
     getCurrentConfig() {
-        return {
-            maxTokens: 300,
-            temperature: 0.7,
-            autoRounds: true,
-            moderationPause: 4
-        };
+        return this.currentConfig;
     }
 
     async applyConfiguration() {
@@ -605,6 +607,7 @@ class PhilosopherChatApp {
             const data = await response.json();
             
             if (data.success) {
+                this.currentConfig = config; // Update the stored config
                 this.showNotification('Configuration updated successfully', 'success');
                 this.hideConfigModal();
             } else {
