@@ -172,6 +172,11 @@ class PhilosopherChatApp {
             this.updateAIStatus('Random selection: ' + data.message.replace('🎲 ', ''));
         });
 
+        this.socket.on('targeted-response', (data) => {
+            this.showNotification(data.message, 'info');
+            this.updateAIStatus(`Generating targeted response from ${data.targetProvider}...`);
+        });
+
         this.socket.on('error', (error) => {
             console.error('Socket error:', error);
             this.updateStatus('error', error.message);
@@ -244,13 +249,52 @@ class PhilosopherChatApp {
         
         if (!message) return;
 
+        // Detect @ mentions for targeting specific providers
+        const targetedProvider = this.extractTargetedProvider(message);
+        
+        
         this.socket.emit('human-message', {
             conversationId: this.conversationId,
-            message
+            message,
+            targetedProvider: targetedProvider
         });
 
         messageInput.value = '';
-        this.updateAIStatus('Processing your message...');
+        
+        if (targetedProvider) {
+            this.updateAIStatus(`Targeting message to ${targetedProvider}...`);
+        } else {
+            this.updateAIStatus('Processing your message...');
+        }
+    }
+
+    extractTargetedProvider(message) {
+        // Look for @ mentions at the beginning of the message - be more flexible
+        const mentionRegex = /^@([a-zA-Z][a-zA-Z\s]*?)(?:\s|$)/i;
+        const match = message.match(mentionRegex);
+        
+        if (match) {
+            const mentionedName = match[1].toLowerCase().trim();
+            
+            // Check against available providers with multiple case-insensitive variations
+            const provider = this.availableProviders.find(p => {
+                const originalName = p.name;
+                const lowerProviderName = originalName.toLowerCase();
+                
+                // Test multiple variations
+                const variations = [
+                    lowerProviderName,                              // "grok", "meta ai"
+                    lowerProviderName.replace(/\s+/g, ''),         // "grok", "metaai" 
+                    lowerProviderName.replace(/\s+/g, '-'),        // "grok", "meta-ai"
+                    originalName.toLowerCase().split(' ')[0],       // "grok", "meta" (first word only)
+                ];
+                
+                return variations.some(variation => variation === mentionedName);
+            });
+            return provider ? provider.name : null;
+        }
+        
+        return null;
     }
 
     requestAIResponses() {

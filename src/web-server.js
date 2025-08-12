@@ -323,7 +323,7 @@ class PhilosopherChatServer {
       });
 
       socket.on('human-message', async (data) => {
-        const { conversationId, message } = data;
+        const { conversationId, message, targetedProvider } = data;
         
         try {
           await this.memory.addMessage('Human', message, conversationId, this.providers);
@@ -350,7 +350,7 @@ class PhilosopherChatServer {
           this.autoRoundCounts.set(conversationId, 0);
           this.consecutiveAIMessages.set(conversationId, 0);
           
-          await this.processAIResponses(conversationId);
+          await this.processAIResponses(conversationId, targetedProvider);
           
         } catch (error) {
           socket.emit('error', { message: error.message });
@@ -415,7 +415,7 @@ class PhilosopherChatServer {
     return availableProviders[randomIndex];
   }
 
-  async processAIResponses(conversationId) {
+  async processAIResponses(conversationId, targetedProvider = null) {
     if (this.providers.length === 0) {
       this.io.to(conversationId).emit('demo-response', {
         message: 'Demo mode: AI providers would respond here with actual API keys'
@@ -442,6 +442,35 @@ class PhilosopherChatServer {
     if (availableProviders.length === 0) {
       this.io.to(conversationId).emit('error', { message: 'No active AI providers selected' });
       return;
+    }
+
+    // Handle targeted provider (@provider) messages
+    if (targetedProvider) {
+      const targetProvider = availableProviders.find(p => p.name === targetedProvider);
+      
+      if (targetProvider) {
+        console.log(`🎯 Targeted message to ${targetedProvider}`);
+        
+        // Use only the targeted provider
+        const providersToUse = [targetProvider];
+        
+        this.io.to(conversationId).emit('targeted-response', {
+          message: `🎯 Message directed to ${targetedProvider}`,
+          targetProvider: targetedProvider
+        });
+        
+        // Process the targeted response
+        await this.processSingleProviderResponse(conversationId, targetProvider, context);
+        return;
+      } else {
+        // Targeted provider not found or not active
+        this.io.to(conversationId).emit('error', { 
+          message: `Provider "${targetedProvider}" is not available or not active` 
+        });
+        
+        // Fall through to normal processing
+        console.log(`⚠️ Targeted provider ${targetedProvider} not found, proceeding with normal flow`);
+      }
     }
 
     // RANDOMIZATION: Choose providers in random order
@@ -600,6 +629,55 @@ class PhilosopherChatServer {
           message: 'Auto-rounds complete. Waiting for human input to continue...'
         });
       }
+    }
+  }
+
+  async processSingleProviderResponse(conversationId, provider, context) {
+    try {
+      this.io.to(conversationId).emit('ai-thinking', { 
+        provider: provider.name 
+      });
+
+      const history = this.memory.getConversationHistory(conversationId);
+      const conversation = this.memory.getCurrentConversation();
+      const lastMessage = history[history.length - 1];
+      
+      // Generate a prompt for the targeted response
+      const targetedPrompt = `The human has specifically asked for your response to their message: "${lastMessage?.content || 'Continue the discussion.'}". Please respond directly to this request about "${conversation.topic}".`;
+
+      const response = await provider.sendMessage(targetedPrompt, context);
+      
+      // Clean response of any participant labels
+      const cleanResponse = this.cleanResponseText(response, provider.name);
+      
+      await this.memory.addMessage(provider.name, cleanResponse, conversationId, this.providers);
+
+      const messageData = {
+        id: Date.now() + Math.random(),
+        speaker: provider.name,
+        content: cleanResponse,
+        timestamp: new Date().toISOString()
+      };
+
+      this.io.to(conversationId).emit('new-message', messageData);
+
+      const consensus = await this.memory.updateConsensus(this.providers);
+      const analytics = this.memory.getAnalytics();
+
+      this.io.to(conversationId).emit('analytics-update', {
+        consensus,
+        themes: analytics.themes.slice(0, 5),
+        wordMap: analytics.wordMap
+      });
+
+      console.log(`✅ Targeted response from ${provider.name} completed`);
+
+    } catch (error) {
+      console.error(`Error from targeted provider ${provider.name}:`, error.message);
+      this.io.to(conversationId).emit('ai-error', {
+        provider: provider.name,
+        error: error.message
+      });
     }
   }
 

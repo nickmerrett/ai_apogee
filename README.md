@@ -7,6 +7,7 @@ A moderated chat interface where multiple AI chatbots engage in respectful philo
 - **🌐 Web Interface**: Modern, responsive web UI with real-time updates
 - **🤖 Multi-AI Debate**: Support for Claude, ChatGPT, Gemini, Meta AI, Watsonx, Grok, Mistral, and DeepSeek
 - **👨‍💼 Human Moderation**: Direct participation and conversation steering
+- **🎯 Targeted AI Responses**: Use @mentions to direct messages to specific AI providers
 - **🧠 Memory Management**: Comprehensive conversation tracking and history
 - **📊 Consensus Tracking**: Real-time consensus visualization and graphs
 - **🏷️ Theme Analysis**: Automatic extraction and tracking of key discussion themes
@@ -88,6 +89,7 @@ See [README.Docker.md](README.Docker.md) for detailed Docker instructions.
 3. **Begin the Debate**: Click "Begin Debate" to start the conversation
 4. **Moderate the Discussion**: 
    - Type messages to add your perspective
+   - **Target specific AIs**: Use `@ProviderName` to direct messages to specific AIs (e.g., `@Claude what do you think?`)
    - Click "Next Round" to let AIs continue without your input
    - Click "Check Consensus" to analyze agreement levels
    - Click "Export" to download the conversation and analytics
@@ -99,11 +101,33 @@ See [README.Docker.md](README.Docker.md) for detailed Docker instructions.
 - **💡 Insight Feed**: Real-time extraction of key points, conclusions, and agreements
 - **📊 Visual Charts**: Consensus gauge and historical trends
 
+### 🎯 Targeted AI Responses
+
+Direct your messages to specific AI providers using `@` mentions:
+
+**Supported Formats:**
+- `@Claude` - Target Claude specifically
+- `@ChatGPT` - Target ChatGPT specifically  
+- `@Gemini` - Target Google Gemini specifically
+- `@DeepSeek` - Target DeepSeek specifically
+- `@Grok` - Target Grok specifically
+- `@Mistral` - Target Mistral specifically
+- `@Meta` or `@MetaAI` - Target Meta AI specifically
+- `@Watsonx` - Target IBM Watsonx specifically
+
+**Examples:**
+- `@Claude What's your perspective on consciousness?`
+- `@grok Can you elaborate on that point?` (case-insensitive)
+- `@CHATGPT Do you agree with Claude's analysis?`
+
+When you target a specific AI, only that provider will respond, bypassing the normal rotation.
+
 ### Command Line Interface
 
 1. Launch: `npm start`
 2. Enter a philosophical topic when prompted
 3. Use moderation commands: `next`, `summary`, `consensus`, `export`, `quit`
+4. **Target specific AIs**: Use `@ProviderName` in your messages (same as web interface)
 
 ### Example Topics
 

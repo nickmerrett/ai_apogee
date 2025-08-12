@@ -2,6 +2,10 @@ import { ClaudeProvider } from './providers/claude-provider.js';
 import { ChatGPTProvider } from './providers/chatgpt-provider.js';
 import { GeminiProvider } from './providers/gemini-provider.js';
 import { DeepSeekProvider } from './providers/deepseek-provider.js';
+import { GrokProvider } from './providers/grok-provider.js';
+import { MistralProvider } from './providers/mistral-provider.js';
+import { MetaProvider } from './providers/meta-provider.js';
+import { WatsonxProvider } from './providers/watsonx-provider.js';
 import { ChatInterface } from './chat-interface.js';
 import chalk from 'chalk';
 
@@ -9,7 +13,11 @@ const CONFIG = {
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
-  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY
+  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY,
+  GROK_API_KEY: process.env.GROK_API_KEY,
+  MISTRAL_API_KEY: process.env.MISTRAL_API_KEY,
+  META_API_KEY: process.env.META_API_KEY,
+  WATSONX_API_KEY: process.env.WATSONX_API_KEY
 };
 
 async function main() {
@@ -65,6 +73,54 @@ async function main() {
     console.log(chalk.gray('   Set DEEPSEEK_API_KEY environment variable to enable'));
   }
 
+  if (CONFIG.GROK_API_KEY) {
+    try {
+      providers.push(new GrokProvider(CONFIG.GROK_API_KEY));
+      console.log(chalk.green('✅ Grok provider initialized'));
+    } catch (error) {
+      console.log(chalk.red('❌ Failed to initialize Grok provider:', error.message));
+    }
+  } else {
+    console.log(chalk.yellow('⚠️  Grok provider skipped (no API key found)'));
+    console.log(chalk.gray('   Set GROK_API_KEY environment variable to enable'));
+  }
+
+  if (CONFIG.MISTRAL_API_KEY) {
+    try {
+      providers.push(new MistralProvider(CONFIG.MISTRAL_API_KEY));
+      console.log(chalk.green('✅ Mistral provider initialized'));
+    } catch (error) {
+      console.log(chalk.red('❌ Failed to initialize Mistral provider:', error.message));
+    }
+  } else {
+    console.log(chalk.yellow('⚠️  Mistral provider skipped (no API key found)'));
+    console.log(chalk.gray('   Set MISTRAL_API_KEY environment variable to enable'));
+  }
+
+  if (CONFIG.META_API_KEY) {
+    try {
+      providers.push(new MetaProvider(CONFIG.META_API_KEY));
+      console.log(chalk.green('✅ Meta AI provider initialized'));
+    } catch (error) {
+      console.log(chalk.red('❌ Failed to initialize Meta AI provider:', error.message));
+    }
+  } else {
+    console.log(chalk.yellow('⚠️  Meta AI provider skipped (no API key found)'));
+    console.log(chalk.gray('   Set META_API_KEY environment variable to enable'));
+  }
+
+  if (CONFIG.WATSONX_API_KEY) {
+    try {
+      providers.push(new WatsonxProvider(CONFIG.WATSONX_API_KEY));
+      console.log(chalk.green('✅ Watsonx provider initialized'));
+    } catch (error) {
+      console.log(chalk.red('❌ Failed to initialize Watsonx provider:', error.message));
+    }
+  } else {
+    console.log(chalk.yellow('⚠️  Watsonx provider skipped (no API key found)'));
+    console.log(chalk.gray('   Set WATSONX_API_KEY environment variable to enable'));
+  }
+
   if (providers.length === 0) {
     console.log(chalk.red.bold('\n❌ No AI providers available!'));
     console.log(chalk.yellow('Please set at least one of the following environment variables:'));
@@ -72,6 +128,10 @@ async function main() {
     console.log(chalk.gray('  - OPENAI_API_KEY (for ChatGPT)'));
     console.log(chalk.gray('  - GOOGLE_API_KEY (for Gemini)'));
     console.log(chalk.gray('  - DEEPSEEK_API_KEY (for DeepSeek)'));
+    console.log(chalk.gray('  - GROK_API_KEY (for Grok)'));
+    console.log(chalk.gray('  - MISTRAL_API_KEY (for Mistral)'));
+    console.log(chalk.gray('  - META_API_KEY (for Meta AI)'));
+    console.log(chalk.gray('  - WATSONX_API_KEY (for Watsonx)'));
     console.log(chalk.gray('\nExample: ANTHROPIC_API_KEY=your_key npm start\n'));
     process.exit(1);
   }

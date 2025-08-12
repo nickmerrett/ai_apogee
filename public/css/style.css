@@ -673,6 +673,21 @@ body {
     box-shadow: 0 0 0 3px rgba(90, 103, 216, 0.1);
 }
 
+.input-help {
+    margin-top: 8px;
+    text-align: center;
+}
+
+.input-help small {
+    color: #718096;
+    font-size: 0.8em;
+}
+
+.input-help i {
+    margin-right: 5px;
+    color: #5a67d8;
+}
+
 .send-btn {
     background: #5a67d8;
     color: white;
