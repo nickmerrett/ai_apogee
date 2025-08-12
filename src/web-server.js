@@ -11,6 +11,7 @@ import { MetaProvider } from './providers/meta-provider.js';
 import { WatsonxProvider } from './providers/watsonx-provider.js';
 import { GrokProvider } from './providers/grok-provider.js';
 import { MistralProvider } from './providers/mistral-provider.js';
+import { DeepSeekProvider } from './providers/deepseek-provider.js';
 import { ConversationMemory } from './utils/memory.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,6 +25,7 @@ const CONFIG = {
   WATSONX_API_KEY: process.env.WATSONX_API_KEY,
   GROK_API_KEY: process.env.GROK_API_KEY,
   MISTRAL_API_KEY: process.env.MISTRAL_API_KEY,
+  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY,
   PORT: process.env.PORT || 3000
 };
 
@@ -117,6 +119,15 @@ class PhilosopherChatServer {
         console.log('✅ Mistral provider initialized');
       } catch (error) {
         console.log('❌ Failed to initialize Mistral:', error.message);
+      }
+    }
+
+    if (CONFIG.DEEPSEEK_API_KEY) {
+      try {
+        this.providers.push(new DeepSeekProvider(CONFIG.DEEPSEEK_API_KEY, config));
+        console.log('✅ DeepSeek provider initialized');
+      } catch (error) {
+        console.log('❌ Failed to initialize DeepSeek:', error.message);
       }
     }
 
@@ -603,6 +614,7 @@ class PhilosopherChatServer {
       /^Watsonx:\s*/i,
       /^Grok:\s*/i,
       /^Mistral:\s*/i,
+      /^DeepSeek:\s*/i,
       /^Human:\s*/i,
       /^\w+:\s*/
     ];

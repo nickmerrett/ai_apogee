@@ -560,7 +560,7 @@ body {
 }
 
 .message.claude {
-    border-left: 4px solid #ff6b35;
+    border-left: 4px solid #fff235;
 }
 
 .message.chatgpt {
@@ -569,6 +569,26 @@ body {
 
 .message.gemini {
     border-left: 4px solid #4285f4;
+}
+
+.message.deepseek {
+    border-left: 4px solid #0066cc;
+}
+
+.message.grok {
+    border-left: 4px solid #f10505;
+}
+
+.message.mistral {
+    border-left: 4px solid #ff7000;
+}
+
+.message.watsonx {
+    border-left: 4px solid #0f62fe;
+}
+
+.message.meta-ai {
+    border-left: 4px solid #1877f2;
 }
 
 .message-header {
@@ -728,7 +748,7 @@ body {
 }
 
 .ai-provider-icon.claude {
-    background: #ff6b35;
+    background: #fff235;
 }
 
 .ai-provider-icon.chatgpt {
@@ -737,6 +757,25 @@ body {
 
 .ai-provider-icon.gemini {
     background: #4285f4;
+}
+
+.ai-provider-icon.deepseek {
+    background: #0066cc;
+}
+
+.ai-provider-icon.grok {
+    background: #f10505;
+}
+.ai-provider-icon.mistral {
+    background: #ff7000;
+}
+
+.ai-provider-icon.watsonx {
+    background: #0f62fe;
+}
+
+.ai-provider-icon.meta-ai {
+    background: #1877f2;
 }
 
 .ai-provider-name {

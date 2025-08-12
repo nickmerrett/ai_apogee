@@ -290,7 +290,7 @@ class PhilosopherChatApp {
 
     formatMessage(message) {
         const isHuman = message.speaker === 'Human';
-        const speakerClass = isHuman ? 'human' : `ai ${message.speaker.toLowerCase()}`;
+        const speakerClass = isHuman ? 'human' : `ai ${message.speaker.toLowerCase().replace(/\s+/g, '-')}`;
         const timestamp = new Date(message.timestamp).toLocaleTimeString();
 
         return `
@@ -348,7 +348,7 @@ class PhilosopherChatApp {
 
         container.innerHTML = this.availableProviders.map(provider => {
             const isActive = this.activeProviders.has(provider.name);
-            const iconClass = provider.name.toLowerCase();
+            const iconClass = provider.name.toLowerCase().replace(/\s+/g, '-');
             const iconText = provider.name.charAt(0);
             
             return `

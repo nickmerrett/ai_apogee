@@ -1,13 +1,15 @@
 import { ClaudeProvider } from './providers/claude-provider.js';
 import { ChatGPTProvider } from './providers/chatgpt-provider.js';
 import { GeminiProvider } from './providers/gemini-provider.js';
+import { DeepSeekProvider } from './providers/deepseek-provider.js';
 import { ChatInterface } from './chat-interface.js';
 import chalk from 'chalk';
 
 const CONFIG = {
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-  GOOGLE_API_KEY: process.env.GOOGLE_API_KEY
+  GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
+  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY
 };
 
 async function main() {
@@ -51,12 +53,25 @@ async function main() {
     console.log(chalk.gray('   Set GOOGLE_API_KEY environment variable to enable'));
   }
 
+  if (CONFIG.DEEPSEEK_API_KEY) {
+    try {
+      providers.push(new DeepSeekProvider(CONFIG.DEEPSEEK_API_KEY));
+      console.log(chalk.green('✅ DeepSeek provider initialized'));
+    } catch (error) {
+      console.log(chalk.red('❌ Failed to initialize DeepSeek provider:', error.message));
+    }
+  } else {
+    console.log(chalk.yellow('⚠️  DeepSeek provider skipped (no API key found)'));
+    console.log(chalk.gray('   Set DEEPSEEK_API_KEY environment variable to enable'));
+  }
+
   if (providers.length === 0) {
     console.log(chalk.red.bold('\n❌ No AI providers available!'));
     console.log(chalk.yellow('Please set at least one of the following environment variables:'));
     console.log(chalk.gray('  - ANTHROPIC_API_KEY (for Claude)'));
     console.log(chalk.gray('  - OPENAI_API_KEY (for ChatGPT)'));
     console.log(chalk.gray('  - GOOGLE_API_KEY (for Gemini)'));
+    console.log(chalk.gray('  - DEEPSEEK_API_KEY (for DeepSeek)'));
     console.log(chalk.gray('\nExample: ANTHROPIC_API_KEY=your_key npm start\n'));
     process.exit(1);
   }

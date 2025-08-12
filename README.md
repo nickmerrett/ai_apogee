@@ -5,7 +5,7 @@ A moderated chat interface where multiple AI chatbots engage in respectful philo
 ## Features
 
 - **🌐 Web Interface**: Modern, responsive web UI with real-time updates
-- **🤖 Multi-AI Debate**: Support for Claude, ChatGPT, Gemini, Meta AI, Watsonx, Grok, and Mistral
+- **🤖 Multi-AI Debate**: Support for Claude, ChatGPT, Gemini, Meta AI, Watsonx, Grok, Mistral, and DeepSeek
 - **👨‍💼 Human Moderation**: Direct participation and conversation steering
 - **🧠 Memory Management**: Comprehensive conversation tracking and history
 - **📊 Consensus Tracking**: Real-time consensus visualization and graphs
@@ -63,6 +63,7 @@ See [README.Docker.md](README.Docker.md) for detailed Docker instructions.
    export WATSONX_API_KEY="your_watsonx_api_key"
    export GROK_API_KEY="your_grok_api_key"
    export MISTRAL_API_KEY="your_mistral_api_key"
+   export DEEPSEEK_API_KEY="your_deepseek_api_key"
    ```
 
 3. **Run the Application**
